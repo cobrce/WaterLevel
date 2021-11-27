@@ -67,6 +67,19 @@ void Write_Max7219_Byte(uint8_t value)
     }
 }
 
+void Clear_Max7219()
+{
+
+    for (int col = 0; col < 8; col++)
+    {
+        Write_Max7219(col + 1,
+                      0,
+                      0,
+                      0,
+                      0);
+    }
+}
+
 void Write_Max7219(byte address, short in_01, short in_02, short in_03, short in_04)
 {
     PORTB &= ~(1 << Max7219PinCS);
