@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "light_ws2812.h": "c",
+        "eeprom.h": "c",
+        "millis.h": "c",
+        "cstddef": "c",
+        "interrupt.h": "c",
+        "ws2812_config.h": "c",
+        "modes.h": "c",
+        "io.h": "c",
+        "io43u35x.h": "c",
+        "iotn26.h": "c",
+        "matrixled.h": "c",
+        "display.h": "c",
+        "spi.h": "c",
+        "delay.h": "c",
+        "cstdlib": "cpp"
+    }
+}
