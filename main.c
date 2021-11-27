@@ -146,11 +146,9 @@ void FlashValue(uint32_t value)
 
 int main(void)
 {
-    
-	Max7219_Init();
+    Max7219_Init();
 
     DDRB |= _BV(TriggerPin);
-
         
     FullHeight = eeprom_read_dword(&EE_FullHeight);
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
@@ -171,8 +169,8 @@ int main(void)
     while (1)
     {
         distance = MeasureDistance();
-        uint16_t percent = ((FullHeight - distance) / FullHeight);
-        percent = TwoPercentAlign(percent);
+        uint16_t percent = ((FullHeight - distance) * 100 / FullHeight);
+        // percent = TwoPercentAlign(percent);
 
         if (percent > 100) // update full height
         {
