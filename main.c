@@ -169,14 +169,26 @@ int main(void)
     while (1)
     {
         distance = MeasureDistance();
-        uint16_t percent = ((FullHeight - distance) * 100 / FullHeight);
-        // percent = TwoPercentAlign(percent);
-
-        if (percent > 100) // update full height
+        if (distance > 200)
         {
-            percent = 100;
-            FullHeight = FullWater + distance;
+            FlashValue(MEASURE_SENSOR_TOO_FAR);
         }
-        DisplayInt(percent, TRUE);
+        else if (distance < 10)
+        {
+            FlashValue(MEASURE_SENSOR_TOO_FAR);
+        }
+        else
+        {
+            uint16_t percent = ((FullHeight - distance) * 100 / FullHeight);
+            // percent = TwoPercentAlign(percent);
+
+            if (percent > 100) // update full height
+            {
+                percent = 100;
+                FullHeight = FullWater + distance;
+            }
+            DisplayInt(percent, TRUE);
+            _delay_ms(1000);
+        }
     }
 }
