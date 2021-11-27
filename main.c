@@ -2,6 +2,8 @@
 #include <util/delay.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
+
 #include "MAX7219_attiny.h"
 #include "font.h"
 //#include "display.h"
@@ -11,6 +13,17 @@
 
 #define EchoPin PB6
 #define TriggerPin PB3
+
+#ifndef FALSE
+#define FALSE 0
+#define TRUE 1
+#endif // !FALSE
+
+
+#define FullWater 200
+uint32_t EEMEM EE_FullHeight = 200;
+volatile uint32_t FullHeight = 0;
+volatile uint32_t distance; // for debug
 
 void SetupTimer()
 {
@@ -71,14 +84,12 @@ uint32_t MeasureDistance()
     // uint16_t distance = time * 34300 / 2; // time in seconds
     return time / 466; // time in 0.125us
 }
-#define FullWater 200
-volatile uint32_t FullHeight = 200;
-volatile uint32_t distance; // for debug
 
 void CalibrateFullHeight()
 {
     distance = MeasureDistance();
     FullHeight = FullWater + distance;
+    eeprom_write_dword(&EE_FullHeight,FullHeight);
 }
 
 void DisplayInt(uint8_t value)
@@ -106,6 +117,7 @@ int main(void)
 
     DDRB |= _BV(TriggerPin);
 
+    FullHeight = eeprom_read_dword(&EE_FullHeight);
     SetupTimer();
 
     SetupTimerOverFlowInterrupt();

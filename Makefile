@@ -20,10 +20,11 @@ all:
 	${CC} ${CFLAGS} -o ${TARGET}.o ${SRCS}
 	${LD} -o ${TARGET}.elf ${TARGET}.o
 	${OBJCOPY} -j .text -j .data -O ihex ${TARGET}.o ${TARGET}.hex
+	${OBJCOPY} -j .eeprom  --set-section-flags=.eeprom=alloc,load --change-section-lma .eeprom=0  --no-change-warnings -O ihex ${TARGET}.elf ${TARGET}.eep
 	${SIZE} -C --mcu=${MCU} ${TARGET}.elf
 
 flash: all
-	${AVRDUDE} -p ${MCU} -c stk500v1 -P COM4 -b 115200 -U flash:w:${TARGET}.hex:i -F
+	${AVRDUDE} -p ${MCU} -c stk500v1 -P COM4 -b 115200 -U flash:w:${TARGET}.hex:i -U eeprom:w:${TARGET}.eep:a -F
 
 fuse:
 	$(AVRDUDE) -p ${MCU} -c stk500v1 -P COM4 -b 115200 -U hfuse:w:${FUSE_H}:m -U lfuse:w:${FUSE_L}:m
