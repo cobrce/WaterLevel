@@ -23,7 +23,7 @@ uint32_t EEMEM EE_FullHeight = 200;
 volatile uint32_t FullHeight = 0;
 volatile uint32_t distance; // for debug
 
-void SetupTimer()
+inline void SetupTimer()
 {
     TCCR0 = (0 << CS02) | (0 << CS01) | (1 << CS00); // prescaler 1 (non null to enable timer)
 }
@@ -35,23 +35,13 @@ ISR(TIMER0_OVF0_vect)
     TimerOverflow++; /* Increment Timer Overflow count */
 }
 
-void SetupTimerOverFlowInterrupt()
+inline void SetupTimerOverFlowInterrupt()
 {
     TIMSK = _BV(TOIE0);
     sei();
 }
 
-char SignalStart()
-{
-    return ((PINB >> EchoPin) & 1);
-}
-
-char SignalEnd()
-{
-    return !SignalStart();
-}
-
-void Trigger()
+inline void Trigger()
 {
     PORTB |= _BV(TriggerPin);
     _delay_us(10);
@@ -106,7 +96,7 @@ uint32_t MeasureDistance() // in cm
     }
 }
 
-uint16_t CalibrateFullHeight()
+inline uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
 
