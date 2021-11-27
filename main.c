@@ -6,8 +6,8 @@
 
 #include "MAX7219_attiny.h"
 #include "font.h"
-//#include "display.h"
-// #include "millis.h"
+#include "errors.h"
+
 
 #define __COMPILING_AVR_LIBC__ 1
 
@@ -85,29 +85,63 @@ uint32_t MeasureDistance()
     return time / 466; // time in 0.125us
 }
 
-void CalibrateFullHeight()
+uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
+    if (distance > 200)
+        return CALBIRATION_SENSOR_TOO_FAR;
     FullHeight = FullWater + distance;
     eeprom_write_dword(&EE_FullHeight,FullHeight);
+    return 0;
 }
 
-void DisplayInt(uint8_t value)
+void DisplayInt(uint32_t value, uint8_t isPercent)
 {
-	for (int col = 0; col < 8; col++)
-	{
-		Write_Max7219(col + 1,
-					  get_line_from_8x8_matrix((uint8_t *)percent, col),
-					  get_line_from_8x8_matrix((uint8_t *)(numbers[(value) % 10]), col),
-					  get_line_from_8x8_matrix((uint8_t *)(numbers[(value / 10) % 10]), col),
-					  get_line_from_8x8_matrix((uint8_t *)(numbers[(value / 100) % 10]), col));
-	}
+    uint8_t oldSreg = SREG;
+    cli();
+
+    uint8_t *data[5];
+
+    data[0] = (uint8_t *)percent;
+    data[1] = (uint8_t *)(numbers[(value) % 10]);
+    data[2] = (uint8_t *)(numbers[(value / 10) % 10]);
+    data[3] = (uint8_t *)(numbers[(value / 100) % 10]);
+    data[4] = (uint8_t *)(numbers[(value / 1000) % 10]);
+
+    uint8_t **first_data = &data[isPercent ? 0 : 1];
+
+    for (int col = 0; col < 8; col++)
+    {
+        Write_Max7219(col + 1,
+                      get_line_from_8x8_matrix(first_data[0], col),
+                      get_line_from_8x8_matrix(first_data[1], col),
+                      get_line_from_8x8_matrix(first_data[2], col),
+                      get_line_from_8x8_matrix(first_data[3], col));
+    }
+    SREG = oldSreg;
 }
 
 inline uint16_t TwoPercentAlign(uint16_t percent)
 {
     // return (percent) - (percent%2);
     return percent & ~(1);
+}
+
+void DisplayError(uint16_t error_code)
+{
+    while (TRUE)
+    {
+        DisplayInt(error_code, FALSE);
+        _delay_ms(1000);
+    }
+}
+
+void FlashValue(uint32_t value)
+{
+    DisplayInt(value,FALSE);
+    _delay_ms(1000);
+    Clear_Max7219();
+    _delay_ms(200);
 }
 
 int main(void)
@@ -117,12 +151,22 @@ int main(void)
 
     DDRB |= _BV(TriggerPin);
 
+        
     FullHeight = eeprom_read_dword(&EE_FullHeight);
+    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
+    
+    
     SetupTimer();
 
     SetupTimerOverFlowInterrupt();
 
-    CalibrateFullHeight();
+    uint16_t error_code = CalibrateFullHeight();
+    if (error_code)
+        DisplayError(error_code); // display error code infinitly (until reset)
+
+    FlashValue(distance); // display distance for 1 sec then clear sceen
+    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
+    
 
     while (1)
     {
@@ -135,7 +179,7 @@ int main(void)
             percent = 100;
             FullHeight = FullWater + distance;
         }
-        DisplayInt(FullHeight);
+        DisplayInt(percent, TRUE);
         _delay_ms(1000);
     }
 }
