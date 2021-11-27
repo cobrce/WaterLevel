@@ -61,26 +61,49 @@ void Trigger()
 volatile uint32_t time;
 volatile uint8_t cntr = 5;
 
+enum SignlaStates
+{
+    WaitingToStart,
+    WaitingToEnd,
+    SignalEnded
+} SignalState;
+
 uint32_t MeasureDistance() // in cm
 {
     Trigger();
 
-    while (!(PINB & _BV(EchoPin)))
+    SignalState = WaitingToStart;
+
+    while (TRUE)
     {
+        switch (SignalState)
+        {
+        case WaitingToStart:
+            if (TimerOverflow == 700) // timedout
+                SignalState = SignalEnded;
+
+            if (PINB & _BV(EchoPin)) // signal started
+            {
+                SignalState = WaitingToEnd;
+                TCNT0 = 0;
+                TimerOverflow = 0;
+            }
+            break;
+
+        case WaitingToEnd:
+            if (!(PINB & _BV(EchoPin)) || TimerOverflow == 700) // signal eneded or timed out
+                SignalState = SignalEnded;                
+            break;
+
+        case SignalEnded:
+            cntr = TCNT0; // for debug
+            time = TCNT0 + (TimerOverflow * 256);
+
+            // uint16_t distance = time * 34300 / 2; // time in seconds
+            return time / 466; // time in 0.125us
+            break;
+        }
     }
-
-    TCNT0 = 0;
-    TimerOverflow = 0;
-
-    while ((PINB & _BV(EchoPin)) && TimerOverflow != 700)
-    {
-    }
-
-    cntr = TCNT0; // for debug
-    time = TCNT0 + (TimerOverflow * 256);
-
-    // uint16_t distance = time * 34300 / 2; // time in seconds
-    return time / 466; // time in 0.125us
 }
 
 uint16_t CalibrateFullHeight()
