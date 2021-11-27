@@ -15,18 +15,19 @@ void Write_Max7219(byte address, short in_01, short in_02, short in_03, short in
 #ifdef ROTATED
 inline
 #endif
-uint8_t get_line_from_8x8_matrix(uint8_t *matrix_8x8, uint8_t line)
+    uint8_t
+    get_line_from_8x8_matrix(uint8_t *matrix_8x8, uint8_t line)
 {
-    #ifdef ROTATED
+#ifdef ROTATED
     return (matrix_8x8[line]);
-    #else
+#else
     uint8_t output = 0;
 
     for (int i = 0; i < 8; i++)
         output |= ((matrix_8x8[i] >> (7 - line)) & 1) << (7 - i);
 
     return output;
-    #endif
+#endif
 }
 
 #define Max7219PinDIN PB0
@@ -35,15 +36,14 @@ uint8_t get_line_from_8x8_matrix(uint8_t *matrix_8x8, uint8_t line)
 #define Max7219_HIGHT 8
 #define Max7219_WIDTH 8
 
-
 void Max7219_Init()
 {
     DDRB = 1 << Max7219PinCLK | 1 << Max7219PinCS | 1 << Max7219PinDIN;
-	Write_Max7219(0x09, 0x00, 0x00, 0x00, 0x00); // using an led matrix (not digits)
-	Write_Max7219(0x0A, 0x00, 0x00, 0x00, 0x00); // Brightness 0x00-0x0F 0x01=dark .... 0x0F=bright
-	Write_Max7219(0x0B, 0x07, 0x07, 0x07, 0x07); // Scan limit = 7
-	Write_Max7219(0x0C, 0x01, 0x01, 0x01, 0x01); // Normal operation mode
-	Write_Max7219(0x0F, 0x00, 0x00, 0x00, 0x00); // Disable display test
+    Write_Max7219(0x09, 0x00, 0x00, 0x00, 0x00); // using an led matrix (not digits)
+    Write_Max7219(0x0A, 0x00, 0x00, 0x00, 0x00); // Brightness 0x00-0x0F 0x01=dark .... 0x0F=bright
+    Write_Max7219(0x0B, 0x07, 0x07, 0x07, 0x07); // Scan limit = 7
+    Write_Max7219(0x0C, 0x01, 0x01, 0x01, 0x01); // Normal operation mode
+    Write_Max7219(0x0F, 0x00, 0x00, 0x00, 0x00); // Disable display test
 }
 
 void Write_Max7219_Byte(uint8_t value)
