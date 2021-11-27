@@ -14,6 +14,11 @@
         "display.h": "c",
         "spi.h": "c",
         "delay.h": "c",
-        "cstdlib": "cpp"
+        "cstdlib": "cpp",
+        "array": "c",
+        "vector": "c",
+        "xstring": "c",
+        "xutility": "c",
+        "string": "c"
     }
 }

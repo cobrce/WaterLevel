@@ -63,7 +63,7 @@ void Trigger()
 volatile uint32_t time;
 volatile uint8_t cntr = 5;
 
-uint32_t MeasureDistance()
+uint32_t MeasureDistance() // in cm
 {
     Trigger();
 
@@ -74,7 +74,7 @@ uint32_t MeasureDistance()
     TCNT0 = 0;
     TimerOverflow = 0;
 
-    while ((PINB & _BV(EchoPin)))
+    while ((PINB & _BV(EchoPin)) && TimerOverflow != 700)
     {
     }
 
