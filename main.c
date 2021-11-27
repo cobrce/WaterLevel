@@ -8,7 +8,6 @@
 #include "font.h"
 #include "errors.h"
 
-
 #define __COMPILING_AVR_LIBC__ 1
 
 #define EchoPin PB6
@@ -18,7 +17,6 @@
 #define FALSE 0
 #define TRUE 1
 #endif // !FALSE
-
 
 #define FullWater 200
 uint32_t EEMEM EE_FullHeight = 200;
@@ -88,10 +86,14 @@ uint32_t MeasureDistance() // in cm
 uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
+
     if (distance > 200)
         return CALBIRATION_SENSOR_TOO_FAR;
+    else if (distance < 10)
+        return CALBIRATION_SENSOR_TOO_CLOSE;
+
     FullHeight = FullWater + distance;
-    eeprom_write_dword(&EE_FullHeight,FullHeight);
+    eeprom_write_dword(&EE_FullHeight, FullHeight);
     return 0;
 }
 
@@ -138,7 +140,7 @@ void DisplayError(uint16_t error_code)
 
 void FlashValue(uint32_t value)
 {
-    DisplayInt(value,FALSE);
+    DisplayInt(value, FALSE);
     _delay_ms(1000);
     Clear_Max7219();
     _delay_ms(200);
@@ -149,11 +151,10 @@ int main(void)
     Max7219_Init();
 
     DDRB |= _BV(TriggerPin);
-        
+
     FullHeight = eeprom_read_dword(&EE_FullHeight);
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
-    
-    
+
     SetupTimer();
 
     SetupTimerOverFlowInterrupt();
@@ -162,9 +163,8 @@ int main(void)
     if (error_code)
         DisplayError(error_code); // display error code infinitly (until reset)
 
-    FlashValue(distance); // display distance for 1 sec then clear sceen
+    FlashValue(distance);   // display distance for 1 sec then clear sceen
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
-    
 
     while (1)
     {
@@ -178,6 +178,5 @@ int main(void)
             FullHeight = FullWater + distance;
         }
         DisplayInt(percent, TRUE);
-        _delay_ms(1000);
     }
 }
