@@ -19,7 +19,7 @@
 #endif // !FALSE
 
 #define FullWater 200
-uint32_t EEMEM EE_FullHeight = 200;
+uint32_t EEMEM EE_FullHeight = 225;
 volatile uint32_t FullHeight = 0;
 volatile uint32_t distance; // for debug
 
