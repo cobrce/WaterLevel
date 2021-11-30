@@ -18,10 +18,11 @@
 #define TRUE 1
 #endif // !FALSE
 
-#define FullWater 200
-#define TOO_FAR_HEIGHT 235
+#define SENSOR_HEIGHT 10
+#define FULL_WATER 200
+#define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
-uint32_t EEMEM EE_FullHeight = 225;
+uint32_t EEMEM EE_FullHeight = FULL_WATER+SENSOR_HEIGHT;
 volatile uint32_t FullHeight = 0;
 volatile uint32_t distance; // for debug
 
@@ -56,22 +57,22 @@ static inline void Trigger()
 uint32_t MeasureDistance() // in cm
 {
     Trigger();
-    
-        TimerOverflow = 0;
 
-        while (!(PINB & _BV(EchoPin) && TimerOverflow!=700));
+    TimerOverflow = 0;
 
-        TCNT0 = 0;
-        TimerOverflow = 0;
+    while (!(PINB & _BV(EchoPin) && TimerOverflow != 700))
+        ;
 
-        while ((PINB & _BV(EchoPin)) && TimerOverflow!=700);
+    TCNT0 = 0;
+    TimerOverflow = 0;
 
-        // distance = (time = (TCNT0 + TimerOverflow * 255) / 8) / (466 / 8);
+    while ((PINB & _BV(EchoPin)) && TimerOverflow != 700)
+        ;
 
-        return (TCNT0 + TimerOverflow * 255) / 466 ;
+    // distance = (time = (TCNT0 + TimerOverflow * 255) / 8) / (466 / 8);
 
+    return (TCNT0 + TimerOverflow * 255) / 466;
 }
-
 
 #ifdef CALIBRATE
 inline uint16_t CalibrateFullHeight()
@@ -83,7 +84,7 @@ inline uint16_t CalibrateFullHeight()
     else if (distance < TOO_CLOSE_HEIGHT)
         return CALBIRATION_SENSOR_TOO_CLOSE;
 
-    FullHeight = FullWater + distance;
+    FullHeight = FULL_WATER + distance;
     eeprom_write_dword(&EE_FullHeight, FullHeight);
     return 0;
 }
@@ -149,8 +150,8 @@ int main(void)
     Max7219_Init();
 
     DDRB |= _BV(TriggerPin);
-    PORTB &=_BV(EchoPin); // no pull up
-    
+    PORTB &= _BV(EchoPin); // no pull up
+
     SetupTimer();
 
     SetupTimerOverFlowInterrupt();
@@ -164,38 +165,47 @@ int main(void)
     FullHeight = eeprom_read_dword(&EE_FullHeight);
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
-    #ifdef CALIBRATE
+#ifdef CALIBRATE
     uint16_t error_code = CalibrateFullHeight();
     if (error_code)
         DisplayError(error_code); // display error code infinitly (until reset)
-    
+
     FlashValue(distance);   // display distance for 1 sec then clear sceen
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
-    #endif
+#endif
 
+    uint32_t mean_distance;
     while (1)
     {
-        distance = MeasureDistance();
-        if (distance > TOO_FAR_HEIGHT)
+        mean_distance = 0;
+        for (int i = 0; i < 20;)
         {
-            FlashValue(MEASURE_SENSOR_TOO_FAR);
-        }
-        else if (distance < TOO_CLOSE_HEIGHT)
-        {
-            FlashValue(MEASURE_SENSOR_TOO_FAR);
-        }
-        else
-        {
-            uint16_t percent = ((FullHeight - distance) * 100 / FullHeight);
-            // percent = TwoPercentAlign(percent);
-
-            if (percent > 100) // update full height
+            distance = MeasureDistance();
+            if (distance > TOO_FAR_HEIGHT)
             {
-                percent = 100;
-                FullHeight = FullWater + distance;
+                FlashValue(MEASURE_SENSOR_TOO_FAR);
             }
-            DisplayInt(percent, TRUE);
-            _delay_ms(1000);
+            else if (distance < TOO_CLOSE_HEIGHT)
+            {
+                FlashValue(MEASURE_SENSOR_TOO_FAR);
+            }
+            else
+            {
+                mean_distance += distance;
+                _delay_ms(50);
+                i++;
+            }
         }
+        mean_distance /= 20;
+        uint16_t percent = ((FullHeight - mean_distance) * 100 / FullHeight);
+        // percent = TwoPercentAlign(percent);
+
+        if (percent > 100) // update full height
+        {
+            percent = 100;
+            FullHeight = FULL_WATER + mean_distance;
+        }
+        DisplayInt(percent, TRUE);
+        _delay_ms(500);
     }
 }
