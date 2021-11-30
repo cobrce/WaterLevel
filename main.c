@@ -110,8 +110,14 @@ inline uint16_t CalibrateFullHeight()
     return 0;
 }
 
+volatile uint8_t AutoRefresh = 0;
 void DisplayInt(uint32_t value, uint8_t isPercent)
 {
+    if (++AutoRefresh == 20)
+    {
+        AutoRefresh = 0;
+        Max7219_Init();
+    }
     uint8_t oldSreg = SREG;
     cli();
 
