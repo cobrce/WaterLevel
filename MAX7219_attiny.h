@@ -29,10 +29,10 @@ inline
     return output;
 #endif
 }
+#define Max7219PinCLK PB0
+#define Max7219PinCS PB1
+#define Max7219PinDIN PB2
 
-#define Max7219PinDIN PB0
-#define Max7219PinCLK PB1
-#define Max7219PinCS PB2
 #define Max7219_HIGHT 8
 #define Max7219_WIDTH 8
 
