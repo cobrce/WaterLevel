@@ -19,6 +19,8 @@
 #endif // !FALSE
 
 #define FullWater 200
+#define TOO_FAR_HEIGHT 235
+#define TOO_CLOSE_HEIGHT 10
 uint32_t EEMEM EE_FullHeight = 225;
 volatile uint32_t FullHeight = 0;
 volatile uint32_t distance; // for debug
@@ -76,9 +78,9 @@ inline uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
 
-    if (distance > 200)
+    if (distance > TOO_FAR_HEIGHT)
         return CALBIRATION_SENSOR_TOO_FAR;
-    else if (distance < 10)
+    else if (distance < TOO_CLOSE_HEIGHT)
         return CALBIRATION_SENSOR_TOO_CLOSE;
 
     FullHeight = FullWater + distance;
@@ -167,11 +169,11 @@ int main(void)
     while (1)
     {
         distance = MeasureDistance();
-        if (distance > 200)
+        if (distance > TOO_FAR_HEIGHT)
         {
             FlashValue(MEASURE_SENSOR_TOO_FAR);
         }
-        else if (distance < 10)
+        else if (distance < TOO_CLOSE_HEIGHT)
         {
             FlashValue(MEASURE_SENSOR_TOO_FAR);
         }
