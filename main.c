@@ -70,6 +70,8 @@ uint32_t MeasureDistance() // in cm
 
 }
 
+
+#ifdef CALIBRATE
 inline uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
@@ -83,6 +85,7 @@ inline uint16_t CalibrateFullHeight()
     eeprom_write_dword(&EE_FullHeight, FullHeight);
     return 0;
 }
+#endif
 
 volatile uint8_t AutoRefresh = 0;
 void DisplayInt(uint32_t value, uint8_t isPercent)
@@ -152,12 +155,14 @@ int main(void)
 
     SetupTimerOverFlowInterrupt();
 
+    #ifdef CALIBRATE
     uint16_t error_code = CalibrateFullHeight();
     if (error_code)
         DisplayError(error_code); // display error code infinitly (until reset)
-
+    
     FlashValue(distance);   // display distance for 1 sec then clear sceen
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
+    #endif
 
     while (1)
     {
