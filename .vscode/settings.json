@@ -19,6 +19,7 @@
         "vector": "c",
         "xstring": "c",
         "xutility": "c",
-        "string": "c"
+        "string": "c",
+        "iterator": "c"
     }
 }

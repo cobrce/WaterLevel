@@ -149,13 +149,20 @@ int main(void)
     Max7219_Init();
 
     DDRB |= _BV(TriggerPin);
-
-    FullHeight = eeprom_read_dword(&EE_FullHeight);
-    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
-
+    PORTB &=_BV(EchoPin); // no pull up
+    
     SetupTimer();
 
     SetupTimerOverFlowInterrupt();
+
+    // while (1)
+    // {
+    //     DisplayInt(MeasureDistance(),FALSE);
+    //     _delay_ms(50);
+    // }
+
+    FullHeight = eeprom_read_dword(&EE_FullHeight);
+    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
     #ifdef CALIBRATE
     uint16_t error_code = CalibrateFullHeight();
