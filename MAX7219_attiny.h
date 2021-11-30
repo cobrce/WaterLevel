@@ -38,7 +38,7 @@ inline
 
 void Max7219_Init()
 {
-    DDRB = 1 << Max7219PinCLK | 1 << Max7219PinCS | 1 << Max7219PinDIN;
+    DDRB |= 1 << Max7219PinCLK | 1 << Max7219PinCS | 1 << Max7219PinDIN;
     Write_Max7219(0x09, 0x00, 0x00, 0x00, 0x00); // using an led matrix (not digits)
     Write_Max7219(0x0A, 0x00, 0x00, 0x00, 0x00); // Brightness 0x00-0x0F 0x01=dark .... 0x0F=bright
     Write_Max7219(0x0B, 0x07, 0x07, 0x07, 0x07); // Scan limit = 7
