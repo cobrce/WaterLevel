@@ -41,7 +41,7 @@ inline void SetupTimerOverFlowInterrupt()
     sei();
 }
 
-inline void Trigger()
+static inline void Trigger()
 {
     PORTB |= _BV(TriggerPin);
     _delay_us(10);
