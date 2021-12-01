@@ -197,7 +197,7 @@ int main(void)
             }
         }
         mean_distance /= 20;
-        uint16_t percent = ((FullHeight - mean_distance) * 100 / FullHeight);
+        uint16_t percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
         // percent = TwoPercentAlign(percent);
 
         if (percent > 100) // update full height
