@@ -22,9 +22,11 @@
 #define FULL_WATER 190
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
-uint32_t EEMEM EE_FullHeight = FULL_WATER+SENSOR_HEIGHT;
-volatile uint32_t FullHeight = 0;
-volatile uint32_t distance; // for debug
+#define HYSTERESIS 5
+
+uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT;
+volatile uint16_t FullHeight = 0;
+volatile uint16_t distance; // for debug
 
 inline void SetupTimer()
 {
@@ -54,7 +56,7 @@ static inline void Trigger()
 // volatile uint32_t time;
 // volatile uint8_t cntr = 5;
 
-uint32_t MeasureDistance() // in cm
+uint16_t MeasureDistance() // in cm
 {
     Trigger();
 
@@ -85,13 +87,13 @@ inline uint16_t CalibrateFullHeight()
         return CALBIRATION_SENSOR_TOO_CLOSE;
 
     FullHeight = FULL_WATER + distance;
-    eeprom_write_dword(&EE_FullHeight, FullHeight);
+    eeprom_write_word(&EE_FullHeight, FullHeight);
     return 0;
 }
 #endif
 
 volatile uint8_t AutoRefresh = 0;
-void DisplayInt(uint32_t value, uint8_t isPercent)
+void DisplayInt(uint16_t value, uint8_t isPercent)
 {
     if (++AutoRefresh == 20)
     {
@@ -137,12 +139,36 @@ void DisplayError(uint16_t error_code)
     }
 }
 
-void FlashValue(uint32_t value)
+void FlashValue(uint16_t value)
 {
     DisplayInt(value, FALSE);
     _delay_ms(1000);
     Clear_Max7219();
     _delay_ms(200);
+}
+
+uint16_t MeasureMeanDistance()
+{
+    uint16_t mean_distance = 0;
+    for (int i = 0; i < 20;)
+    {
+        distance = MeasureDistance();
+        if (distance > TOO_FAR_HEIGHT)
+        {
+            FlashValue(MEASURE_SENSOR_TOO_FAR);
+        }
+        else if (distance < TOO_CLOSE_HEIGHT)
+        {
+            FlashValue(MEASURE_SENSOR_TOO_FAR);
+        }
+        else
+        {
+            mean_distance += distance;
+            _delay_ms(50);
+            i++;
+        }
+    }
+    return mean_distance / 20;
 }
 
 int main(void)
@@ -162,7 +188,7 @@ int main(void)
     //     _delay_ms(50);
     // }
 
-    FullHeight = eeprom_read_dword(&EE_FullHeight);
+    FullHeight = eeprom_read_word(&EE_FullHeight);
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
 #ifdef CALIBRATE
@@ -174,36 +200,25 @@ int main(void)
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 #endif
 
-    uint32_t mean_distance;
+    uint16_t mean_distance = MeasureMeanDistance();
+    uint16_t percent = TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
     while (1)
     {
-        mean_distance = 0;
-        for (int i = 0; i < 20;)
-        {
-            distance = MeasureDistance();
-            if (distance > TOO_FAR_HEIGHT)
-            {
-                FlashValue(MEASURE_SENSOR_TOO_FAR);
-            }
-            else if (distance < TOO_CLOSE_HEIGHT)
-            {
-                FlashValue(MEASURE_SENSOR_TOO_FAR);
-            }
-            else
-            {
-                mean_distance += distance;
-                _delay_ms(50);
-                i++;
-            }
-        }
-        mean_distance /= 20;
-        uint16_t percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
-        // percent = TwoPercentAlign(percent);
+        uint16_t new_mean_distance = MeasureMeanDistance();
 
-        if (percent > 100) // update full height
+        if ((new_mean_distance > (mean_distance + HYSTERESIS)) || // consider only critical changes
+            (new_mean_distance < (mean_distance - HYSTERESIS)))
         {
-            percent = 100;
-            FullHeight = FULL_WATER + mean_distance;
+            mean_distance = new_mean_distance;
+
+            percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
+            percent = TwoPercentAlign(percent);
+
+            if (percent > 100) // update full height
+            {
+                percent = 100;
+                FullHeight = FULL_WATER + mean_distance;
+            }
         }
         DisplayInt(percent, TRUE);
         _delay_ms(500);

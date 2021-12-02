@@ -21,5 +21,6 @@
         "xutility": "c",
         "string": "c",
         "iterator": "c"
-    }
+    },
+    "C_Cpp.dimInactiveRegions": true
 }
