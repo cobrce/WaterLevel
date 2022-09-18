@@ -200,8 +200,8 @@ int main(void)
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 #endif
 
-    uint16_t mean_distance = MeasureMeanDistance();
-    uint16_t percent = TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
+    uint16_t mean_distance = 0;//MeasureMeanDistance();
+    uint16_t percent = 100;//TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
     while (1)
     {
         uint16_t new_mean_distance = MeasureMeanDistance();
