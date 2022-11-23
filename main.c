@@ -3,22 +3,26 @@
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
-
 #include "MAX7219_attiny.h"
 #include "font.h"
 #include "errors.h"
 
-#define __COMPILING_AVR_LIBC__ 1
+#define PIN_UART_TX PD1
+#define PIN_I2C_SDA PC4
+#define PIN_I2C_SCL PC5
+#include "vl53l0x-non-arduino/VL53L0X.h"
+#include "vl53l0x-non-arduino/util/i2cmaster.h"
+#include "vl53l0x-non-arduino/util/debugPrint.h"
+#include "vl53l0x-non-arduino/util/millis.h"
 
-#define EchoPin PB6
-#define TriggerPin PB3
+#define __COMPILING_AVR_LIBC__ 1
 
 #ifndef FALSE
 #define FALSE 0
 #define TRUE 1
 #endif // !FALSE
 
-#define SENSOR_HEIGHT 10
+#define SENSOR_HEIGHT 25
 #define FULL_WATER 190
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
@@ -28,52 +32,17 @@ uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT;
 volatile uint16_t FullHeight = 0;
 volatile uint16_t distance; // for debug
 
-inline void SetupTimer()
-{
-    TCCR0 = (0 << CS02) | (0 << CS01) | (1 << CS00); // prescaler 1 (non null to enable timer)
-}
-
-volatile uint32_t TimerOverflow = 0;
-
-ISR(TIMER0_OVF0_vect)
-{
-    TimerOverflow++; /* Increment Timer Overflow count */
-}
-
-inline void SetupTimerOverFlowInterrupt()
-{
-    TIMSK = _BV(TOIE0);
-    sei();
-}
-
-static inline void Trigger()
-{
-    PORTB |= _BV(TriggerPin);
-    _delay_us(10);
-    PORTB &= !_BV(TriggerPin);
-}
-
-// volatile uint32_t time;
-// volatile uint8_t cntr = 5;
-
 uint16_t MeasureDistance() // in cm
 {
-    Trigger();
+    statInfo_t xTraStats;
+    do
+    {
+        distance = readRangeSingleMillimeters(&xTraStats) / 10;
+    } while ((distance | 1) == 8191);
 
-    TimerOverflow = 0;
-
-    while (!(PINB & _BV(EchoPin) && TimerOverflow != 700))
-        ;
-
-    TCNT0 = 0;
-    TimerOverflow = 0;
-
-    while ((PINB & _BV(EchoPin)) && TimerOverflow != 700)
-        ;
-
-    // distance = (time = (TCNT0 + TimerOverflow * 255) / 8) / (466 / 8);
-
-    return (TCNT0 + TimerOverflow * 255) / 466;
+    debug_dec(distance);
+    debug_str("cm ");
+    return distance;
 }
 
 #ifdef CALIBRATE
@@ -92,12 +61,12 @@ inline uint16_t CalibrateFullHeight()
 }
 #endif
 
-volatile uint8_t AutoRefresh = 0;
+volatile uint8_t AutoRefreshCounter = 0;
 void DisplayInt(uint16_t value, uint8_t isPercent)
 {
-    if (++AutoRefresh == 20)
+    if (++AutoRefreshCounter == 20)
     {
-        AutoRefresh = 0;
+        AutoRefreshCounter = 0;
         Max7219_Init();
     }
     uint8_t oldSreg = SREG;
@@ -105,7 +74,7 @@ void DisplayInt(uint16_t value, uint8_t isPercent)
 
     uint8_t *data[5];
 
-    data[0] = (uint8_t *)percent;
+    data[0] = (uint8_t *)(percent);
     data[1] = (uint8_t *)(numbers[(value) % 10]);
     data[2] = (uint8_t *)(numbers[(value / 10) % 10]);
     data[3] = (uint8_t *)(numbers[(value / 100) % 10]);
@@ -147,10 +116,12 @@ void FlashValue(uint16_t value)
     _delay_ms(200);
 }
 
+#define NUMBER_OF_SAMPLES 5
+
 uint16_t MeasureMeanDistance()
 {
     uint16_t mean_distance = 0;
-    for (int i = 0; i < 20;)
+    for (int i = 0; i < NUMBER_OF_SAMPLES;)
     {
         distance = MeasureDistance();
         if (distance > TOO_FAR_HEIGHT)
@@ -164,32 +135,43 @@ uint16_t MeasureMeanDistance()
         else
         {
             mean_distance += distance;
-            _delay_ms(50);
+            _delay_ms(1);
             i++;
         }
     }
-    return mean_distance / 20;
+    return mean_distance / NUMBER_OF_SAMPLES;
+}
+
+void init()
+{
+
+    debugInit();
+    //--------------------------------------------------
+    // GPIOs
+    //--------------------------------------------------
+    UCSR0B &= ~_BV(RXEN0);   // Disable UART RX
+    DDRD = _BV(PIN_UART_TX); // Set UART TX as output
+    i2c_init();
+    initMillis();
+    sei();
 }
 
 int main(void)
 {
+    init();
+
+    initVL53L0X(0);
+    // startContinuous(0);
     Max7219_Init();
 
-    DDRB |= _BV(TriggerPin);
-    PORTB &= _BV(EchoPin); // no pull up
-
-    SetupTimer();
-
-    SetupTimerOverFlowInterrupt();
-
-    // while (1)
-    // {
-    //     DisplayInt(MeasureDistance(),FALSE);
-    //     _delay_ms(50);
-    // }
+    setSignalRateLimit(0.1);
+    setVcselPulsePeriod(VcselPeriodPreRange, 18);
+    setVcselPulsePeriod(VcselPeriodFinalRange, 14);
+    setMeasurementTimingBudget(500 * 1000UL);
 
     FullHeight = eeprom_read_word(&EE_FullHeight);
-    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
+
+    // FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
 #ifdef CALIBRATE
     uint16_t error_code = CalibrateFullHeight();
@@ -200,27 +182,46 @@ int main(void)
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 #endif
 
-    uint16_t mean_distance = 0;//MeasureMeanDistance();
-    uint16_t percent = 100;//TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
     while (1)
     {
-        uint16_t new_mean_distance = MeasureMeanDistance();
+        uint16_t mean_distance = MeasureMeanDistance();
 
-        if ((new_mean_distance > (mean_distance + HYSTERESIS)) || // consider only critical changes
-            (new_mean_distance < (mean_distance - HYSTERESIS)))
+        uint16_t percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
+
+        if (percent > 100) // update full height
         {
-            mean_distance = new_mean_distance;
-
-            percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
-            percent = TwoPercentAlign(percent);
-
-            if (percent > 100) // update full height
-            {
-                percent = 100;
-                FullHeight = FULL_WATER + mean_distance;
-            }
+            percent = 100;
+            FullHeight = FULL_WATER + mean_distance;
         }
-        DisplayInt(percent, TRUE);
+        debug_dec(percent);
+        debug_str("% ");
+
+        // DisplayInt(percent, TRUE);
         _delay_ms(500);
     }
+
+
+    // uint16_t mean_distance = 0; // MeasureMeanDistance();
+    // uint16_t percent = 100;     // TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
+    // while (1)
+    // {
+    //     uint16_t new_mean_distance = MeasureMeanDistance();
+
+    //     if ((new_mean_distance > (mean_distance + HYSTERESIS)) || // consider only critical changes
+    //         (new_mean_distance < (mean_distance - HYSTERESIS)))
+    //     {
+    //         mean_distance = new_mean_distance;
+
+    //         percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
+    //         percent = TwoPercentAlign(percent);
+
+    //         if (percent > 100) // update full height
+    //         {
+    //             percent = 100;
+    //             FullHeight = FULL_WATER + mean_distance;
+    //         }
+    //     }
+    //     DisplayInt(percent, TRUE);
+    //     _delay_ms(500);
+    // }
 }

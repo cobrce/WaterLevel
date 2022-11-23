@@ -20,7 +20,10 @@
         "xstring": "c",
         "xutility": "c",
         "string": "c",
-        "iterator": "c"
+        "iterator": "c",
+        "max7219_attiny.h": "c",
+        "debugprint.h": "c",
+        "setbaud.h": "c"
     },
     "C_Cpp.dimInactiveRegions": true
 }
