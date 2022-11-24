@@ -175,7 +175,7 @@ int main(void)
 
     FullHeight = eeprom_read_word(&EE_FullHeight);
 
-    // FlashValue(FullHeight); // display full height for 1 sec then clear sceen
+    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
 #ifdef CALIBRATE
     uint16_t error_code = CalibrateFullHeight();
@@ -203,8 +203,8 @@ int main(void)
         debug_dec(percent);
         debug_str("% ");
 
-        // DisplayInt(percent, TRUE);
-        _delay_ms(500);
+        DisplayInt(percent, TRUE);
+        _delay_ms(200);
     }
 
 
