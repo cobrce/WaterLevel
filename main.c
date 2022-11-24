@@ -36,10 +36,8 @@ volatile uint16_t distance; // for debug
 uint16_t MeasureDistance() // in cm
 {
     statInfo_t xTraStats;
-    // do
-    // {
+
     distance = readRangeSingleMillimeters(&xTraStats) / 10;
-    // } while ((distance | 1) == 8191);
 
     debug_dec(distance);
     debug_str("cm ");
@@ -94,12 +92,6 @@ void DisplayInt(uint16_t value, uint8_t isPercent)
     SREG = oldSreg;
 }
 
-inline uint16_t TwoPercentAlign(uint16_t percent)
-{
-    // return (percent) - (percent%2);
-    return percent & ~(1);
-}
-
 void DisplayError(uint16_t error_code)
 {
     while (TRUE)
@@ -116,32 +108,6 @@ void FlashValue(uint16_t value)
     Clear_Max7219();
     _delay_ms(200);
 }
-
-// #define NUMBER_OF_SAMPLES 5
-//
-// uint16_t MeasureMeanDistance()
-// {
-//     uint16_t mean_distance = 0;
-//     for (int i = 0; i < NUMBER_OF_SAMPLES;)
-//     {
-//         distance = MeasureDistance();
-//         if (distance > TOO_FAR_HEIGHT)
-//         {
-//             FlashValue(MEASURE_SENSOR_TOO_FAR);
-//         }
-//         else if (distance < TOO_CLOSE_HEIGHT)
-//         {
-//             FlashValue(MEASURE_SENSOR_TOO_FAR);
-//         }
-//         else
-//         {
-//             mean_distance += distance;
-//             _delay_ms(1);
-//             i++;
-//         }
-//     }
-//     return mean_distance / NUMBER_OF_SAMPLES;
-// }
 
 void pwmWrite(uint8_t value)
 {
@@ -246,28 +212,4 @@ int main(void)
         DisplayInt(percent, TRUE);
         _delay_ms(200);
     }
-
-    // uint16_t mean_distance = 0; // MeasureMeanDistance();
-    // uint16_t percent = 100;     // TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
-    // while (1)
-    // {
-    //     uint16_t new_mean_distance = MeasureMeanDistance();
-
-    //     if ((new_mean_distance > (mean_distance + HYSTERESIS)) || // consider only critical changes
-    //         (new_mean_distance < (mean_distance - HYSTERESIS)))
-    //     {
-    //         mean_distance = new_mean_distance;
-
-    //         percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
-    //         percent = TwoPercentAlign(percent);
-
-    //         if (percent > 100) // update full height
-    //         {
-    //             percent = 100;
-    //             FullHeight = FULL_WATER + mean_distance;
-    //         }
-    //     }
-    //     DisplayInt(percent, TRUE);
-    //     _delay_ms(500);
-    // }
 }
