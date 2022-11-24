@@ -35,10 +35,10 @@ volatile uint16_t distance; // for debug
 uint16_t MeasureDistance() // in cm
 {
     statInfo_t xTraStats;
-    do
-    {
-        distance = readRangeSingleMillimeters(&xTraStats) / 10;
-    } while ((distance | 1) == 8191);
+    // do
+    // {
+    distance = readRangeSingleMillimeters(&xTraStats) / 10;
+    // } while ((distance | 1) == 8191);
 
     debug_dec(distance);
     debug_str("cm ");
@@ -116,30 +116,34 @@ void FlashValue(uint16_t value)
     _delay_ms(200);
 }
 
-#define NUMBER_OF_SAMPLES 5
+// #define NUMBER_OF_SAMPLES 5
+//
+// uint16_t MeasureMeanDistance()
+// {
+//     uint16_t mean_distance = 0;
+//     for (int i = 0; i < NUMBER_OF_SAMPLES;)
+//     {
+//         distance = MeasureDistance();
+//         if (distance > TOO_FAR_HEIGHT)
+//         {
+//             FlashValue(MEASURE_SENSOR_TOO_FAR);
+//         }
+//         else if (distance < TOO_CLOSE_HEIGHT)
+//         {
+//             FlashValue(MEASURE_SENSOR_TOO_FAR);
+//         }
+//         else
+//         {
+//             mean_distance += distance;
+//             _delay_ms(1);
+//             i++;
+//         }
+//     }
+//     return mean_distance / NUMBER_OF_SAMPLES;
+// }
 
-uint16_t MeasureMeanDistance()
+
 {
-    uint16_t mean_distance = 0;
-    for (int i = 0; i < NUMBER_OF_SAMPLES;)
-    {
-        distance = MeasureDistance();
-        if (distance > TOO_FAR_HEIGHT)
-        {
-            FlashValue(MEASURE_SENSOR_TOO_FAR);
-        }
-        else if (distance < TOO_CLOSE_HEIGHT)
-        {
-            FlashValue(MEASURE_SENSOR_TOO_FAR);
-        }
-        else
-        {
-            mean_distance += distance;
-            _delay_ms(1);
-            i++;
-        }
-    }
-    return mean_distance / NUMBER_OF_SAMPLES;
 }
 
 void init()
@@ -184,9 +188,12 @@ int main(void)
 
     while (1)
     {
-        uint16_t mean_distance = MeasureMeanDistance();
 
-        uint16_t percent = ((FullHeight - mean_distance) * 100 / FULL_WATER);
+        uint16_t distance = MeasureDistance();
+        if ((distance | 1) == 8191)
+            continue;
+
+        uint16_t percent = ((FullHeight - distance) * 100 / FULL_WATER);
 
         if (percent > 100) // update full height
         {
