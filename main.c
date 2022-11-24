@@ -7,6 +7,7 @@
 #include "font.h"
 #include "errors.h"
 
+#define HB_LED PD3
 #define PIN_UART_TX PD1
 #define PIN_I2C_SDA PC4
 #define PIN_I2C_SCL PC5
@@ -142,22 +143,60 @@ void FlashValue(uint16_t value)
 //     return mean_distance / NUMBER_OF_SAMPLES;
 // }
 
-
+void pwmWrite(uint8_t value)
 {
+    OCR2B = value;
+}
+
+void initTimer1() 
+{
+	//--------------------------------------------------
+	// Timer1 for the heartbeat update
+	//--------------------------------------------------
+	TCCR1B = (1<<WGM12) | (1<<CS11) | (1<<CS10);//Clear TImer on Compar Match Mode (4), no pin output, TOP=OCR1A, 64 prescaler
+	OCR1A = ((F_CPU / 64) / 100);				//every 10ms
+	TIMSK1 = (1<<OCIE1A);
+}
+
+void pwmInit()
+{
+    DDRD |= _BV(HB_LED);
+    TCCR2A = _BV(COM2B1) | _BV(WGM21) | _BV(WGM20);
+    TCCR2B = _BV(CS20);
+    pwmWrite(0);
 }
 
 void init()
 {
-
     debugInit();
     //--------------------------------------------------
     // GPIOs
     //--------------------------------------------------
-    UCSR0B &= ~_BV(RXEN0);   // Disable UART RX
-    DDRD = _BV(PIN_UART_TX); // Set UART TX as output
+    UCSR0B &= ~_BV(RXEN0); // Disable UART RX
+    DDRD = _BV(PIN_UART_TX);
     i2c_init();
     initMillis();
+    initTimer1();
+    pwmInit();
     sei();
+}
+
+volatile uint8_t heartBeatValue = 20;
+volatile int8_t heartBeatDelta = 1;
+void heartBeat()
+{
+    // PORTD ^= _BV(HB_LED);
+
+    if ((heartBeatValue > 100) | (heartBeatValue < 20))
+        heartBeatDelta = -heartBeatDelta;
+
+    heartBeatValue += heartBeatDelta;
+    pwmWrite(heartBeatValue);
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+    heartBeat();
 }
 
 int main(void)
@@ -188,6 +227,7 @@ int main(void)
 
     while (1)
     {
+        heartBeat();
 
         uint16_t distance = MeasureDistance();
         if ((distance | 1) == 8191)
@@ -198,7 +238,7 @@ int main(void)
         if (percent > 100) // update full height
         {
             percent = 100;
-            FullHeight = FULL_WATER + mean_distance;
+            // FullHeight = FULL_WATER + mean_distance;
         }
         debug_dec(percent);
         debug_str("% ");
@@ -206,7 +246,6 @@ int main(void)
         DisplayInt(percent, TRUE);
         _delay_ms(200);
     }
-
 
     // uint16_t mean_distance = 0; // MeasureMeanDistance();
     // uint16_t percent = 100;     // TwoPercentAlign((FullHeight - mean_distance) * 100 / FULL_WATER);
