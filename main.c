@@ -6,6 +6,7 @@
 #include "MAX7219_attiny.h"
 #include "font.h"
 #include "errors.h"
+#include "calibrate.h"
 
 #define HB_LED PD3
 #define PIN_UART_TX PD1
@@ -44,21 +45,14 @@ uint16_t MeasureDistance() // in cm
     return distance;
 }
 
-#ifdef CALIBRATE
-inline uint16_t CalibrateFullHeight()
 {
     distance = MeasureDistance();
 
-    if (distance > TOO_FAR_HEIGHT)
-        return CALBIRATION_SENSOR_TOO_FAR;
-    else if (distance < TOO_CLOSE_HEIGHT)
-        return CALBIRATION_SENSOR_TOO_CLOSE;
 
     FullHeight = FULL_WATER + distance;
     eeprom_write_word(&EE_FullHeight, FullHeight);
     return 0;
 }
-#endif
 
 volatile uint8_t AutoRefreshCounter = 0;
 void DisplayInt(uint16_t value, uint8_t isPercent)
@@ -182,14 +176,8 @@ int main(void)
 
     FlashValue(FullHeight); // display full height for 1 sec then clear sceen
 
-#ifdef CALIBRATE
-    uint16_t error_code = CalibrateFullHeight();
-    if (error_code)
-        DisplayError(error_code); // display error code infinitly (until reset)
 
-    FlashValue(distance);   // display distance for 1 sec then clear sceen
-    FlashValue(FullHeight); // display full height for 1 sec then clear sceen
-#endif
+    calibrate();
 
     while (1)
     {
