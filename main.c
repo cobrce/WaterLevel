@@ -263,6 +263,7 @@ void init()
     initMillis();
     initTimer1();
     pwmInit();
+    InitShiftRegister();
     sei();
 }
 
