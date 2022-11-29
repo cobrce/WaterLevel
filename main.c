@@ -1,4 +1,4 @@
-// #define TEST
+// #define TEST // uncomment to enable test mode for simulation
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/sleep.h>
@@ -10,69 +10,84 @@
 #include "ShiftRegister.h"
 #include "calibrate.h"
 
-#define HB_LED PD3
+// Pins definition
+#define HB_LED PD3 // heartbeat LED
 #define PIN_UART_TX PD1
 #define PIN_I2C_SDA PC4
 #define PIN_I2C_SCL PC5
+// VL53L0X sensor library
 #include "vl53l0x-non-arduino/VL53L0X.h"
 #include "vl53l0x-non-arduino/util/i2cmaster.h"
 #include "vl53l0x-non-arduino/util/debugPrint.h"
 #include "vl53l0x-non-arduino/util/millis.h"
 
-#define __COMPILING_AVR_LIBC__ 1
+#define __COMPILING_AVR_LIBC__ 1 // just to avoid some intellisence annoying messages
 
 #ifndef FALSE
 #define FALSE 0
 #define TRUE 1
 #endif // !FALSE
 
+// some constants
 #define SENSOR_HEIGHT 30
 #define FULL_WATER 190
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
 #define HYSTERESIS 5
 
-uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT;
+uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT; // eeprom variable in case we calibrate and save the actual values
 volatile uint16_t FullHeight = 0;
-volatile uint16_t distance; // for debug
-volatile uint16_t levelInPercent;
+volatile uint16_t distance; // decalred as global for debug
+volatile uint16_t levelInPercent; // same as above, but this is a claculated percentage of water level
 
 // calculate a bargraph representation of a value then shift it to fit the shift register
+// the bargraph contains 10 leds, the percentage is rounded up to 10s, example : 51 is displayed as 6leds, 0 is 1 led, 34 is 4 leds..etc
 uint32_t calculateBarGraph(uint16_t valueInPercent, uint8_t shift)
 {
 
-    if (valueInPercent > 100)
+    if (valueInPercent > 100) // check limits
         valueInPercent = 100;
     uint32_t result = 0;
 
-    uint8_t valueInTens = ((valueInPercent / 10) + 1) % 11; // each led in bargraph represents 10% rounded to the next 10%, seiled at 10
+    uint8_t valueInTens = ((valueInPercent / 10) + 1) % 11; // round up the percents to tens
 
-    while (valueInTens--)
+    while (valueInTens--) // for each "1" in tens (i.e for each 10 in percents) light an led
         result = (result << 1) | 1;
 
-    return result << shift;
+    return result << shift; // shift the final result to the desired bit position (see the call lcoation for more info)
 }
 
 // a queue of detected errors to be displayed in in the seven segment
 uint8_t errors[4] = {0};
 
+// the seven segment display system is based on a finite state machine
+// first either the character "P" (for percents) or "F" (for faults) is displayed
+// then follwed by each number of the percentage of water the error code resp.
+// each character is displayed for 500ms then a 100ms of blank to mark the transition between characters,
+// for example 33% is displayed as : P short_blank 3 short_blank 3, this way the two identical numbers can be told apart
+//
+// the use of a finite state machine makes easy to keep track of what should be dispalyed next since this function is called with
+// a timer and no loop should block the interrupt thread
+
+// are we displaying errors or level percentage
 enum
 {
     SevenSegDisplayingError,
     SevenSegDisplayingWaterLevel
 } StateOfSevenSeg = SevenSegDisplayingWaterLevel;
 
+// what character is being displayed
 enum
 {
-    SevenSegFirstDigit,
-    SevenSegSecondDigit,
-    SevenSegThirdDigit
+    SevenSegFirstDigit, // display either "P" or "F"
+    SevenSegSecondDigit, // display percentage or error code (the name of the constant is confusing but we use this state to display the whole number, another counter is used to track exactly the index of the current number to be displayed, otherwise we would have a lot of states, or may be it would make more sense to rename it?)
+    SevenSegThirdDigit // display a blank character for 500ms (not to confuse with the 100ms flickering blank)
 } PhaseOfSevenSeg = SevenSegFirstDigit;
 
 uint8_t SevenSegFlicker = 0;    // telling "sevenSegDisplayError" and "sevenSegDisplayWaterLevel" that the next char should be blank
 uint8_t SevenSegFlickerEnd = 0; // telling "calculate7Seg" that the previous character was a flicker blank, so updated sooner (100ms instead of 500ms)
 
-uint8_t SevenSegNumbers[] = {
+uint8_t SevenSegNumbers[] = { // seven segments coded numbers
     0b0111111, // 0
     0b0000110, // 1
     0b1011011, // 2
@@ -85,9 +100,10 @@ uint8_t SevenSegNumbers[] = {
     0b1101111  // 9
 };
 
-const uint8_t SevenSegP = 0b1110011;
-const uint8_t SevenSegF = 0b1110001;
+const uint8_t SevenSegP = 0b1110011; // letter "P" coded in seven segments
+const uint8_t SevenSegF = 0b1110001; // letter "F" coded in...
 
+// swap the order of bits, due to the way the bargraph is wired in the PCB
 uint8_t swapBits(uint8_t input)
 {
     uint8_t result = 0;
@@ -100,6 +116,7 @@ uint8_t swapBits(uint8_t input)
     return result;
 }
 
+// extract a digit form a number at a given index, then return its seven segment reperesentation
 uint8_t extractSevenSegDigit(uint32_t value, uint8_t index)
 {
     for (int i = 0; i < index; i++)
@@ -108,51 +125,52 @@ uint8_t extractSevenSegDigit(uint32_t value, uint8_t index)
     return SevenSegNumbers[value]; // convert number into 7 seg representation
 }
 
-volatile uint8_t SevenSegErrorCodeIndex = 1; // like this 2 or 3 chars can be displayed during SevenSegSecondDigit phase and leave third digit for blank char
+volatile uint8_t SevenSegErrorCodeIndex = 1; // the index of a digit from the error code being displayed during SevenSegSecondDigit phase
 uint8_t sevenSegDisplayError()
 {
     uint8_t result;
     result = 0;
-    switch (PhaseOfSevenSeg)
+    switch (PhaseOfSevenSeg) 
     {
-    case SevenSegFirstDigit:
-        SevenSegErrorCodeIndex = 1;
-        PhaseOfSevenSeg = SevenSegSecondDigit;
-        SevenSegFlicker = 1;
-        result = SevenSegF;
+    case SevenSegFirstDigit: // just started displaying the error code
+        SevenSegErrorCodeIndex = 1; // reinit the index
+        PhaseOfSevenSeg = SevenSegSecondDigit; // the next time this function is called it shall process SevenSegSecondDigit
+        SevenSegFlicker = 1; // when SevenSegSecondDigit is being processed a short blank will be dispalyed
+        result = SevenSegF; // the letter 'F' is to be displayed
         break;
 
-    case SevenSegSecondDigit:
+    case SevenSegSecondDigit: // dispaly the error code
     {
-        if (SevenSegFlicker)
+        if (SevenSegFlicker) // a flicker previously requested
         {
-            result = 0;
-            SevenSegFlicker = 0;
-            SevenSegFlickerEnd = 1;
+            result = 0; // return blank character
+            SevenSegFlicker = 0; // no more flicker
+            SevenSegFlickerEnd = 1; // tells "calculate7Seg" to display this charcter for only 100ms 
         }
         else
         {
-            SevenSegFlicker = 1;
-            uint8_t value = errors[0];
-            result = extractSevenSegDigit(value, SevenSegErrorCodeIndex);
-            if (SevenSegErrorCodeIndex == 0) // shifting the errors queue
+            SevenSegFlicker = 1; // a character is being displayed now, so the next time flicker
+            uint8_t value = errors[0]; // get the first error
+            result = extractSevenSegDigit(value, SevenSegErrorCodeIndex); // dispayed the digit with index of "SevenSegErrorCodeIndex"
+            if (SevenSegErrorCodeIndex == 0) // is it the last digit to display? then shift the errors queue
             {
                 for (uint8_t i = 0; i < sizeof(errors) - 1; i++)
                     errors[i] = errors[i + 1];
                 errors[sizeof(errors) - 1] = 0;
-                PhaseOfSevenSeg = SevenSegThirdDigit;
-                SevenSegFlicker = 0;
+                PhaseOfSevenSeg = SevenSegThirdDigit; // move to the next phase of display
+                SevenSegFlicker = 0; // no flicker, the next phase is just blank character for 500ms
             }
             else
             {
-                SevenSegErrorCodeIndex--;
+                SevenSegErrorCodeIndex--;// not the last digit? then move to the next one
             }
         }
     }
     break;
 
-    case SevenSegThirdDigit:
-        StateOfSevenSeg = SevenSegDisplayingWaterLevel; // the last digit of this error is displayed, switching back to water level display, if another error is in queue "Calculate7Seg" will call this again
+    case SevenSegThirdDigit: // display a blank character for 500ms
+        StateOfSevenSeg = SevenSegDisplayingWaterLevel; // the last digit of this error is displayed, switching back to water level display, if another error is in queue "calculate7Seg" will call this again
+        // reset the state of PhaseOfSevenSeg
         PhaseOfSevenSeg = SevenSegFirstDigit;
         SevenSegFlicker = 0;
         break;
@@ -160,8 +178,9 @@ uint8_t sevenSegDisplayError()
     return result;
 }
 
+// this function works the same as the one above, but for water level (both functions can be refactored as a class, hmmm...)
 uint8_t sevenSegWaterLevelIndex;
-uint8_t levelInPercentBuffered = 0;
+uint8_t levelInPercentBuffered = 0; // since the seven seg display system is slow we buffer the value to avoid errors (or else dropping from 80 to 79 may risk to be displayed as 89)
 uint8_t sevenSegDisplayWaterLevel()
 {
     uint8_t result = 0;
@@ -209,22 +228,24 @@ uint8_t sevenSegDisplayWaterLevel()
     return result;
 }
 
-volatile uint32_t lastSevenSegUpdate = 0;
-volatile uint8_t previous7SegValue = 0;
+
+volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
+volatile uint8_t previous7SegValue = 0; // since the seven segment is updated at slower pace, its previous state is being buffered until next update
 // this function calculates the value of 7seg display whether it's an error code or percentage
 uint8_t calculate7Seg()
 {
-#ifndef TEST
+#ifndef TEST // if test mode is enabled this timing system is bypassed
+    // update the seven segment value every 500ms (or 100ms in case of flicker), during that time the prvious value is returned
     uint32_t now = millis();
     if (lastSevenSegUpdate && (now - lastSevenSegUpdate) < (SevenSegFlickerEnd ? 100 : 500))
         return previous7SegValue;
     lastSevenSegUpdate = now;
-    SevenSegFlickerEnd = 0;
+    SevenSegFlickerEnd = 0; // the flicker (in case there was one) is consumed (displayed) at this point 
 #endif
 
-    if (StateOfSevenSeg == SevenSegDisplayingWaterLevel)
+    if (StateOfSevenSeg == SevenSegDisplayingWaterLevel) // if we're displaying level we check for the presence of error codes, if we're already displaying an error we let it finish first, and when it's done it will switch back to display levels, then we can proced to display the next error (if it exists)
     {
-        if (errors[0]) // we have an error
+        if (errors[0]) // we have an error? then reset the display state to prepare for a new display of error code
         {
             StateOfSevenSeg = SevenSegDisplayingError;
             PhaseOfSevenSeg = SevenSegFirstDigit;
@@ -232,7 +253,7 @@ uint8_t calculate7Seg()
         }
     }
 
-    switch (StateOfSevenSeg)
+    switch (StateOfSevenSeg) // a condition operator (? : ) would be enough, but this code is more generic for FSM in case we add other states
     {
     case SevenSegDisplayingError:
         return (previous7SegValue = sevenSegDisplayError());
@@ -244,9 +265,19 @@ uint8_t calculate7Seg()
     }
 }
 
+// macro to set/clear the 10th bit of the bargraph
 #define setA9 PORTD |= _BV(PD4)
 #define clearA9 PORTD &= ~_BV(PD4)
 
+//    Atmega328    ][  seconds shift rehister ][   first shift register    ]
+//            PD4 ][ Q0 Q1 Q2 Q3 Q4 Q5 Q6 Q7  ][ Q7   Q6 Q5 Q4 Q3 Q2 Q1 Q0 ]
+//              |    |  |  |  |  |  |  |  |     |     |  |  |  |  |  |  |
+//           [ A9   A8 A7 A6 A5 A4 A3 A2 A1    A0 ][ G  F  E  D  C  B  A ]
+//           [           bargraph                 ][  seven segments     ]
+
+// the first shift register has the data of the seven segment display and the the first bit of the bargraph
+// the second shift register has 8 bits of the data of the bargraph swapped (because of schematic)
+// the 10 bit of the bargraph is conencted to pin PD4 of the micro controller
 void displayInShiftRegister()
 {
 
