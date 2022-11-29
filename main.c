@@ -25,7 +25,7 @@
 #define TRUE 1
 #endif // !FALSE
 
-#define SENSOR_HEIGHT 25
+#define SENSOR_HEIGHT 30
 #define FULL_WATER 190
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
