@@ -300,7 +300,6 @@ void displayInShiftRegister()
 uint16_t measureDistance() // in cm
 {
     statInfo_t xTraStats;
-    UpdateRegister();
 
     distance = readRangeSingleMillimeters(&xTraStats) / 10;
 
@@ -467,7 +466,6 @@ int main(void)
 #endif
 
     initVL53L0X(0);
-    // startContinuous(0);
     Max7219_Init();
 
     setSignalRateLimit(0.1);
@@ -483,8 +481,6 @@ int main(void)
 
     while (1)
     {
-        heartBeat();
-
         uint16_t distance = measureDistance();
         if ((distance | 1) == 8191)
         {
