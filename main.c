@@ -57,7 +57,7 @@ uint32_t calculateBarGraph(uint16_t valueInPercent, uint8_t shift)
     return result << shift; // shift the final result to the desired bit position (see the call lcoation for more info)
 }
 
-// a queue of detected errors to be displayed in in the seven segment
+// a stack of detected errors to be displayed in in the seven segment
 uint8_t errors[4] = {0};
 
 // the seven segment display system is based on a finite state machine
@@ -152,7 +152,7 @@ uint8_t sevenSegDisplayError()
             SevenSegFlicker = 1; // a character is being displayed now, so the next time flicker
             uint8_t value = errors[0]; // get the first error
             result = extractSevenSegDigit(value, SevenSegErrorCodeIndex); // dispayed the digit with index of "SevenSegErrorCodeIndex"
-            if (SevenSegErrorCodeIndex == 0) // is it the last digit to display? then shift the errors queue
+            if (SevenSegErrorCodeIndex == 0) // is it the last digit to display? then shift the errors stack
             {
                 for (uint8_t i = 0; i < sizeof(errors) - 1; i++)
                     errors[i] = errors[i + 1];
@@ -169,7 +169,7 @@ uint8_t sevenSegDisplayError()
     break;
 
     case SevenSegThirdDigit: // display a blank character for 500ms
-        StateOfSevenSeg = SevenSegDisplayingWaterLevel; // the last digit of this error is displayed, switching back to water level display, if another error is in queue "calculate7Seg" will call this again
+        StateOfSevenSeg = SevenSegDisplayingWaterLevel; // the last digit of this error is displayed, switching back to water level display, if another error is in stack "calculate7Seg" will call this again
         // reset the state of PhaseOfSevenSeg
         PhaseOfSevenSeg = SevenSegFirstDigit;
         SevenSegFlicker = 0;
@@ -308,26 +308,32 @@ uint16_t measureDistance() // in cm
     return distance;
 }
 
-volatile uint8_t AutoRefreshCounter = 0;
+// display integer value in MAX7219 display
+
+volatile uint8_t AutoRefreshCounter = 0; // for some reason my display shows weird character that I had to reinit it regularly
 void displayInt(uint16_t value, uint8_t isPercent)
 {
-    if (++AutoRefreshCounter == 20)
+    if (++AutoRefreshCounter == 20) // reinit the display every 20 call
     {
         AutoRefreshCounter = 0;
         Max7219_Init();
     }
     uint8_t oldSreg = SREG;
-    cli();
+    cli(); // disable all interrupts
 
     uint8_t *data[5];
-
+    
+    // the display has 4 screens, the characters are sent in reverse (last one sent first)
+    // the number is coded as a percent charater followed by 4 digits
+    // if the dispalyed number is a percentage the percent character is the first one and only three digits are displayed, 
+    // otherwise its probably an error code so 4 digits are displayed
     data[0] = (uint8_t *)(percent);
     data[1] = (uint8_t *)(numbers[(value) % 10]);
     data[2] = (uint8_t *)(numbers[(value / 10) % 10]);
     data[3] = (uint8_t *)(numbers[(value / 100) % 10]);
     data[4] = (uint8_t *)(numbers[(value / 1000) % 10]);
 
-    uint8_t **first_data = &data[isPercent ? 0 : 1];
+    uint8_t **first_data = &data[isPercent ? 0 : 1]; // if it's percentage start from the percent character, otherwsise skip it
 
     for (int col = 0; col < 8; col++)
     {
@@ -340,6 +346,7 @@ void displayInt(uint16_t value, uint8_t isPercent)
     SREG = oldSreg;
 }
 
+// display a number (not in percent) for one second
 void displayError(uint16_t error_code)
 {
     while (TRUE)
@@ -349,6 +356,8 @@ void displayError(uint16_t error_code)
     }
 }
 
+// display a number (not in percent) for one second then clear the screen for 200ms
+// usually used to display constants (Fullheight is flashed at startup for example)
 void flashValue(uint16_t value)
 {
     displayInt(value, FALSE);
@@ -357,21 +366,24 @@ void flashValue(uint16_t value)
     _delay_ms(200);
 }
 
+// write the duty cycle of the heart beat led
 void pwmWrite(uint8_t value)
 {
     OCR2B = value;
 }
 
+// initialize the timer1 for 10ms interrupt
 void initTimer1()
 {
     //--------------------------------------------------
     // Timer1 for the heartbeat update
     //--------------------------------------------------
-    TCCR1B = (1 << WGM12) | (1 << CS11) | (1 << CS10); // Clear TImer on Compar Match Mode (4), no pin output, TOP=OCR1A, 64 prescaler
+    TCCR1B = (1 << WGM12) | (1 << CS11) | (1 << CS10); // Clear Timer on Compare Match (Mode 4), no pin output, TOP=OCR1A, 64 prescaler
     OCR1A = ((F_CPU / 64) / 100);                      // every 10ms
     TIMSK1 = (1 << OCIE1A);
 }
 
+// init the pwm pin
 void pwmInit()
 {
     DDRD |= _BV(HB_LED);
@@ -380,6 +392,7 @@ void pwmInit()
     pwmWrite(0);
 }
 
+// initialization function, to init several peripherals, GPIOs and timers
 void init()
 {
     debugInit();
@@ -399,37 +412,38 @@ void init()
     sei();
 }
 
-volatile uint8_t heartBeatValue = 20;
-volatile int8_t heartBeatDelta = 1;
+volatile uint8_t heartBeatValue = 20; // the initial value of the hearbeat pwm
+volatile int8_t heartBeatDelta = 1; // the step to progress the pwm value
 void heartBeat()
 {
-    // PORTD ^= _BV(HB_LED);
-
-    if ((heartBeatValue > 100) | (heartBeatValue < 20))
+    if ((heartBeatValue > 100) | (heartBeatValue < 20)) // every time a max/min value is reached change the direction of the pwm
         heartBeatDelta = -heartBeatDelta;
 
-    heartBeatValue += heartBeatDelta;
+    heartBeatValue += heartBeatDelta; // increase (or decrease) the pwm value
     pwmWrite(heartBeatValue);
 }
 
+// interrupt handler for the timer1 compare match that ticks every 10ms
 ISR(TIMER1_COMPA_vect)
 {
-    heartBeat();
-    displayInShiftRegister();
+    heartBeat(); // update the heartbeat pwm
+    displayInShiftRegister(); // 
 }
 
+// push an error code to the errors stack
 void pushError(uint8_t errorValue)
 {
-    for (int i = sizeof(errors) - 1; i> 0;i--)
+    for (int i = sizeof(errors) - 1; i> 0;i--) // shift the values inside the errors stack
         errors[i] = errors[i-1];
     
-    errors[0] = errorValue;
+    errors[0] = errorValue; // the first element is the latest error
 }
 
 int main(void)
 {
     init();
 
+// this code is used for tests in simulator, so the measurments are generated and the timers are replaced by delays
 #ifdef TEST
     levelInPercent = 11;
     int8_t step = 6;
@@ -468,37 +482,39 @@ int main(void)
     initVL53L0X(0);
     Max7219_Init();
 
+    // configure the VLC53L0X sensor
     setSignalRateLimit(0.1);
     setVcselPulsePeriod(VcselPeriodPreRange, 18);
     setVcselPulsePeriod(VcselPeriodFinalRange, 14);
     setMeasurementTimingBudget(500 * 1000UL);
 
+    // read the fullheight from EEPROM, it's eventually updated if calibration is enabled
     FullHeight = eeprom_read_word(&EE_FullHeight);
 
     flashValue(FullHeight); // display full height for 1 sec then clear sceen
 
-    calibrate();
+    calibrate(); // do the calibration (if enable)
 
-    while (1)
+    while (1) // main loop
     {
-        uint16_t distance = measureDistance();
-        if ((distance | 1) == 8191)
+        uint16_t distance = measureDistance(); // start the distance measurement and return the result
+        if ((distance | 1) == 8191) // is it an error code?
         {
-            pushError(distance - 8100); // either 90 or 91
-            continue;
+            pushError(distance - 8100); // display the error code in the seven segments (either 90 or 91)
+            continue; 
         }
 
         levelInPercent = ((FullHeight - distance) * 100 / FULL_WATER);
 
-        if (levelInPercent > 100) // update full height
+        if (levelInPercent > 100) // maximum 100%
         {
             levelInPercent = 100;
-            // FullHeight = FULL_WATER + mean_distance;
+            // FullHeight = FULL_WATER + mean_distance; // update fullheight
         }
-        debug_dec(levelInPercent);
+        debug_dec(levelInPercent); // send value through serial
         debug_str("% ");
 
-        displayInt(levelInPercent, TRUE);
+        displayInt(levelInPercent, TRUE); // update the MAX7219
         _delay_ms(200);
     }
 }
