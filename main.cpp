@@ -90,8 +90,8 @@ uint8_t swapBits(uint8_t input)
     return result;
 }
 
-SevenSegmentsFSM levelDisplayFSM(3); // initialize the level display finite state machine as 3 character display
-SevenSegmentsFSM errorDisplayFSM(2); // ...as a 2 character dispaly
+SevenSegmentsFSM levelDisplayFSM(3, SevenSegP); // initialize the level display finite state machine as 3 character display
+SevenSegmentsFSM errorDisplayFSM(2, SevenSegF); // ...as a 2 character dispaly
 
 volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
 volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated at slower pace, its previous state is being buffered until next update
