@@ -9,6 +9,7 @@
 #include "errors.h"
 #include "ShiftRegister.h"
 #include "calibrate.h"
+#include "sevenSegmentsFSM.h"
 
 // Pins definition
 #define HB_LED PD3 // heartbeat LED
@@ -37,7 +38,7 @@
 
 uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT; // eeprom variable in case we calibrate and save the actual values
 volatile uint16_t FullHeight = 0;
-volatile uint16_t distance; // decalred as global for debug
+volatile uint16_t distance;       // decalred as global for debug
 volatile uint16_t levelInPercent; // same as above, but this is a claculated percentage of water level
 
 // calculate a bargraph representation of a value then shift it to fit the shift register
@@ -76,33 +77,6 @@ enum
     SevenSegDisplayingWaterLevel
 } StateOfSevenSeg = SevenSegDisplayingWaterLevel;
 
-// what character is being displayed
-enum
-{
-    SevenSegFirstDigit, // display either "P" or "F"
-    SevenSegSecondDigit, // display percentage or error code (the name of the constant is confusing but we use this state to display the whole number, another counter is used to track exactly the index of the current number to be displayed, otherwise we would have a lot of states, or may be it would make more sense to rename it?)
-    SevenSegThirdDigit // display a blank character for 500ms (not to confuse with the 100ms flickering blank)
-} PhaseOfSevenSeg = SevenSegFirstDigit;
-
-uint8_t SevenSegFlicker = 0;    // telling "sevenSegDisplayError" and "sevenSegDisplayWaterLevel" that the next char should be blank
-uint8_t SevenSegFlickerEnd = 0; // telling "calculate7Seg" that the previous character was a flicker blank, so updated sooner (100ms instead of 500ms)
-
-uint8_t SevenSegNumbers[] = { // seven segments coded numbers
-    0b0111111, // 0
-    0b0000110, // 1
-    0b1011011, // 2
-    0b1001111, // 3
-    0b1100110, // 4
-    0b1101101, // 5
-    0b1111101, // 6
-    0b0000111, // 7
-    0b1111111, // 8
-    0b1101111  // 9
-};
-
-const uint8_t SevenSegP = 0b1110011; // letter "P" coded in seven segments
-const uint8_t SevenSegF = 0b1110001; // letter "F" coded in...
-
 // swap the order of bits, due to the way the bargraph is wired in the PCB
 uint8_t swapBits(uint8_t input)
 {
@@ -116,131 +90,43 @@ uint8_t swapBits(uint8_t input)
     return result;
 }
 
-// extract a digit form a number at a given index, then return its seven segment reperesentation
-uint8_t extractSevenSegDigit(uint32_t value, uint8_t index)
-{
-    for (int i = 0; i < index; i++)
-        value /= 10;
-    value %= 10;
-    return SevenSegNumbers[value]; // convert number into 7 seg representation
-}
-
-volatile uint8_t SevenSegErrorCodeIndex = 1; // the index of a digit from the error code being displayed during SevenSegSecondDigit phase
-uint8_t sevenSegDisplayError()
-{
-    uint8_t result;
-    result = 0;
-    switch (PhaseOfSevenSeg) 
-    {
-    case SevenSegFirstDigit: // just started displaying the error code
-        SevenSegErrorCodeIndex = 1; // reinit the index
-        PhaseOfSevenSeg = SevenSegSecondDigit; // the next time this function is called it shall process SevenSegSecondDigit
-        SevenSegFlicker = 1; // when SevenSegSecondDigit is being processed a short blank will be dispalyed
-        result = SevenSegF; // the letter 'F' is to be displayed
-        break;
-
-    case SevenSegSecondDigit: // dispaly the error code
-    {
-        if (SevenSegFlicker) // a flicker previously requested
-        {
-            result = 0; // return blank character
-            SevenSegFlicker = 0; // no more flicker
-            SevenSegFlickerEnd = 1; // tells "calculate7Seg" to display this charcter for only 100ms 
-        }
-        else
-        {
-            SevenSegFlicker = 1; // a character is being displayed now, so the next time flicker
-            uint8_t value = errors[0]; // get the first error
-            result = extractSevenSegDigit(value, SevenSegErrorCodeIndex); // dispayed the digit with index of "SevenSegErrorCodeIndex"
-            if (SevenSegErrorCodeIndex == 0) // is it the last digit to display? then shift the errors stack
-            {
-                for (uint8_t i = 0; i < sizeof(errors) - 1; i++)
-                    errors[i] = errors[i + 1];
-                errors[sizeof(errors) - 1] = 0;
-                PhaseOfSevenSeg = SevenSegThirdDigit; // move to the next phase of display
-                SevenSegFlicker = 0; // no flicker, the next phase is just blank character for 500ms
-            }
-            else
-            {
-                SevenSegErrorCodeIndex--;// not the last digit? then move to the next one
-            }
-        }
-    }
-    break;
-
-    case SevenSegThirdDigit: // display a blank character for 500ms
-        StateOfSevenSeg = SevenSegDisplayingWaterLevel; // the last digit of this error is displayed, switching back to water level display, if another error is in stack "calculate7Seg" will call this again
-        // reset the state of PhaseOfSevenSeg
-        PhaseOfSevenSeg = SevenSegFirstDigit;
-        SevenSegFlicker = 0;
-        break;
-    }
-    return result;
-}
-
-// this function works the same as the one above, but for water level (both functions can be refactored as a class, hmmm...)
-uint8_t sevenSegWaterLevelIndex;
-uint8_t levelInPercentBuffered = 0; // since the seven seg display system is slow we buffer the value to avoid errors (or else dropping from 80 to 79 may risk to be displayed as 89)
-uint8_t sevenSegDisplayWaterLevel()
-{
-    uint8_t result = 0;
-
-    switch (PhaseOfSevenSeg)
-    {
-    case SevenSegFirstDigit:
-        levelInPercentBuffered = levelInPercent;
-        sevenSegWaterLevelIndex = 2;
-        PhaseOfSevenSeg = SevenSegSecondDigit;
-        SevenSegFlicker = 1;
-        result = SevenSegP;
-        break;
-
-    case SevenSegSecondDigit:
-        if (SevenSegFlicker)
-        {
-            result = 0;
-            SevenSegFlicker = 0;
-            SevenSegFlickerEnd = 1;
-        }
-        else
-        {
-            result = extractSevenSegDigit(levelInPercentBuffered, sevenSegWaterLevelIndex);
-            SevenSegFlicker = 1;
-
-            if (sevenSegWaterLevelIndex == 0)
-            {
-                PhaseOfSevenSeg = SevenSegThirdDigit;
-                SevenSegFlicker = 0;
-            }
-            else
-            {
-                sevenSegWaterLevelIndex--;
-            }
-        }
-
-        break;
-
-    default: // SevenSegThirdDigit
-        PhaseOfSevenSeg = SevenSegFirstDigit;
-        SevenSegFlicker = 0;
-        break;
-    }
-    return result;
-}
-
+SevenSegmentsFSM levelDisplayFSM(3); // initialize the level display finite state machine as 3 character display
+SevenSegmentsFSM errorDisplayFSM(2); // ...as a 2 character dispaly
 
 volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
-volatile uint8_t previous7SegValue = 0; // since the seven segment is updated at slower pace, its previous state is being buffered until next update
+volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated at slower pace, its previous state is being buffered until next update
 // this function calculates the value of 7seg display whether it's an error code or percentage
+
+// event handler executed when the error display fsm finishes executing the last phase
+void errorDisplayFSM_OnLastPhaseDoneHandler()
+{
+    for (uint8_t i = 0; i < sizeof(errors) - 1; i++) // pop recently displayed from error stack
+        errors[i] = errors[i + 1];
+    errors[sizeof(errors) - 1] = 0;
+
+    StateOfSevenSeg = SevenSegDisplayingWaterLevel; // switch to display level, if an other error is still in the stack this function will automatically switch back to displaying errors the next time it's called
+    levelDisplayFSM.Reinit();                       // reinit the water level display fsm (the display the message from the beginning)
+}
+
+// even handler executed when the level display fms starts executing the first phase
+void levelDisplayFSM_OnFirstPhaseStarted()
+{
+    levelDisplayFSM.SetValue(levelInPercent); // the set the value to be displayed
+}
+
 uint8_t calculate7Seg()
 {
+    // code to select the FSM currently being executed
+    SevenSegmentsFSM &currentFSM = levelDisplayFSM; // by default we select the water level display FSM 
+    if (StateOfSevenSeg == SevenSegDisplayingError) // if the state is to display error then we select the error display FMS instead
+        currentFSM = errorDisplayFSM;
+
 #ifndef TEST // if test mode is enabled this timing system is bypassed
     // update the seven segment value every 500ms (or 100ms in case of flicker), during that time the prvious value is returned
     uint32_t now = millis();
-    if (lastSevenSegUpdate && (now - lastSevenSegUpdate) < (SevenSegFlickerEnd ? 100 : 500))
+    if (lastSevenSegUpdate && (now - lastSevenSegUpdate) < (currentFSM.isFlickerDone(1) ? 100 : 500))
         return previous7SegValue;
     lastSevenSegUpdate = now;
-    SevenSegFlickerEnd = 0; // the flicker (in case there was one) is consumed (displayed) at this point 
 #endif
 
     if (StateOfSevenSeg == SevenSegDisplayingWaterLevel) // if we're displaying level we check for the presence of error codes, if we're already displaying an error we let it finish first, and when it's done it will switch back to display levels, then we can proced to display the next error (if it exists)
@@ -248,21 +134,13 @@ uint8_t calculate7Seg()
         if (errors[0]) // we have an error? then reset the display state to prepare for a new display of error code
         {
             StateOfSevenSeg = SevenSegDisplayingError;
-            PhaseOfSevenSeg = SevenSegFirstDigit;
-            SevenSegFlicker = 0;
+            errorDisplayFSM.SetValue(errors[0]);
+            currentFSM = errorDisplayFSM;
         }
     }
 
-    switch (StateOfSevenSeg) // a condition operator (? : ) would be enough, but this code is more generic for FSM in case we add other states
-    {
-    case SevenSegDisplayingError:
-        return (previous7SegValue = sevenSegDisplayError());
-        break;
-
-    default: // SevenSegDisplayingWaterLevel
-        return (previous7SegValue = sevenSegDisplayWaterLevel());
-        break;
-    }
+    currentFSM.Execute();
+    return (previous7SegValue = currentFSM.LastResult());
 }
 
 // macro to set/clear the 10th bit of the bargraph
@@ -322,10 +200,10 @@ void displayInt(uint16_t value, uint8_t isPercent)
     cli(); // disable all interrupts
 
     uint8_t *data[5];
-    
+
     // the display has 4 screens, the characters are sent in reverse (last one sent first)
     // the number is coded as a percent charater followed by 4 digits
-    // if the dispalyed number is a percentage the percent character is the first one and only three digits are displayed, 
+    // if the dispalyed number is a percentage the percent character is the first one and only three digits are displayed,
     // otherwise its probably an error code so 4 digits are displayed
     data[0] = (uint8_t *)(percent);
     data[1] = (uint8_t *)(numbers[(value) % 10]);
@@ -409,11 +287,15 @@ void init()
 #endif
     pwmInit();
     InitShiftRegister();
+
+    errorDisplayFSM.OnLastPhaseDone = errorDisplayFSM_OnLastPhaseDoneHandler;
+    levelDisplayFSM.OnFirstPhaseStarted = levelDisplayFSM_OnFirstPhaseStarted;
+
     sei();
 }
 
 volatile uint8_t heartBeatValue = 20; // the initial value of the hearbeat pwm
-volatile int8_t heartBeatDelta = 1; // the step to progress the pwm value
+volatile int8_t heartBeatDelta = 1;   // the step to progress the pwm value
 void heartBeat()
 {
     if ((heartBeatValue > 100) | (heartBeatValue < 20)) // every time a max/min value is reached change the direction of the pwm
@@ -426,16 +308,16 @@ void heartBeat()
 // interrupt handler for the timer1 compare match that ticks every 10ms
 ISR(TIMER1_COMPA_vect)
 {
-    heartBeat(); // update the heartbeat pwm
-    displayInShiftRegister(); // 
+    heartBeat();              // update the heartbeat pwm
+    displayInShiftRegister(); //
 }
 
 // push an error code to the errors stack
 void pushError(uint8_t errorValue)
 {
-    for (int i = sizeof(errors) - 1; i> 0;i--) // shift the values inside the errors stack
-        errors[i] = errors[i-1];
-    
+    for (int i = sizeof(errors) - 1; i > 0; i--) // shift the values inside the errors stack
+        errors[i] = errors[i - 1];
+
     errors[0] = errorValue; // the first element is the latest error
 }
 
@@ -498,10 +380,10 @@ int main(void)
     while (1) // main loop
     {
         uint16_t distance = measureDistance(); // start the distance measurement and return the result
-        if ((distance | 1) == 8191) // is it an error code?
+        if ((distance | 1) == 8191)            // is it an error code?
         {
             pushError(distance - 8100); // display the error code in the seven segments (either 90 or 91)
-            continue; 
+            continue;
         }
 
         levelInPercent = ((FullHeight - distance) * 100 / FULL_WATER);
