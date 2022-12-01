@@ -4,8 +4,8 @@
 // what character is being displayed
 enum Phases
 {
-    SevenSegDisplayType,      // display either "P" or "F"
-    SevenSegDisplayValue,     // display percentage or error code (the name of the constant is confusing but we use this state to display the whole number, another counter is used to track exactly the index of the current number to be displayed, otherwise we would have a lot of states, or may be it would make more sense to rename it?)
+    SevenSegDisplayType,      // display either "P" (for percent) or "F" (for fault)
+    SevenSegDisplayValue,     // display percentage or error code (the name of the constant is confusing but we use this state to display the whole number, another counter is used to track exactly the index of the current number to be displayed)
     SevenSegDisplayFinlaBlank // display a blank character for 500ms (not to confuse with the 100ms flickering blank)
 };
 
@@ -48,8 +48,8 @@ private:
 
 public:
 
-    void (*OnLastPhaseDone)();
-    void (*OnFirstPhaseStarted)();
+    void (*OnFirstPhaseStarted)(); // event handler to be executed (if not 0) befor the first phase is started
+    void (*OnLastPhaseDone)(); // event handler to be executed (if not 0) after the last phase is done
 
     uint8_t isFlickering() { return _flicker; }
 
@@ -122,7 +122,7 @@ public:
             // PhaseOfSevenSeg = SevenSegDisplayType;
             // SevenSegFlicker = 0;
             Reinit(); // finalize, the result is a blank character
-            if (OnLastPhaseDone) // execute the even handler is existing
+            if (OnLastPhaseDone) // execute the event handler if existing
                 OnLastPhaseDone();
             return 1; // tell that the machine finished executing all its states
             break;
