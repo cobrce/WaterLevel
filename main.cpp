@@ -107,20 +107,17 @@ void errorDisplayFSM_OnLastPhaseDoneHandler()
 // even handler executed when the level display fms starts executing the first phase
 void levelDisplayFSM_OnFirstPhaseStarted()
 {
-    levelDisplayFSM.SetValue(levelInPercent); // the set the value to be displayed
+    levelDisplayFSM.value = levelInPercent; // the set the value to be displayed
 }
 
 uint8_t calculate7Seg()
 {
     // code to select the FSM currently being executed
-    SevenSegmentsFSM &activeFSM = levelDisplayFSM;  // by default we select the water level display FSM
-    if (StateOfSevenSeg == SevenSegDisplayingError) // if the state is to display error then we select the error display FMS instead
-        activeFSM = errorDisplayFSM;
-
+    SevenSegmentsFSM *activeFSM = StateOfSevenSeg == SevenSegDisplayingWaterLevel ? &levelDisplayFSM : &errorDisplayFSM;
 #ifndef TEST // if test mode is enabled this timing system is bypassed
     // update the seven segment value every 500ms (or 100ms in case of flicker), during that time the prvious value is returned
     uint32_t now = millis();
-    if (lastSevenSegUpdate && (now - lastSevenSegUpdate) < (activeFSM.isFlickerDone(1) ? 100 : 500))
+    if (lastSevenSegUpdate && (now - lastSevenSegUpdate) < (activeFSM->isFlickerDone(1) ? 100 : 500))
         return previous7SegValue;
     lastSevenSegUpdate = now;
 #endif
@@ -130,8 +127,8 @@ uint8_t calculate7Seg()
         if (errors[0]) // we have an error? then reset the display state to prepare for a new display of error code
         {
             StateOfSevenSeg = SevenSegDisplayingError;
-            errorDisplayFSM.SetValue(errors[0]);
-            activeFSM = errorDisplayFSM;
+            errorDisplayFSM.value = errors[0];
+            activeFSM = &errorDisplayFSM;
 
             for (uint8_t i = 0; i < sizeof(errors) - 1; i++) // pop the error being displayed from the stack
                 errors[i] = errors[i + 1];
@@ -139,8 +136,8 @@ uint8_t calculate7Seg()
         }
     }
 
-    activeFSM.Execute();
-    return (previous7SegValue = activeFSM.LastResult());
+    activeFSM->Execute();
+    return (previous7SegValue = activeFSM->LastResult());
 }
 
 // macro to set/clear the 10th bit of the bargraph
@@ -346,18 +343,13 @@ int main(void)
         levelInPercent += step;
         displayInShiftRegister();
 
-        debug_dec(levelInPercentBuffered);
+        debug_dec(levelDisplayFSM.value);
         debug_putc(' ');
 
-        if (SevenSegFlickerEnd)
-        {
-            SevenSegFlickerEnd = 0;
+        if ((StateOfSevenSeg == SevenSegDisplayingWaterLevel ? levelDisplayFSM : errorDisplayFSM).isFlickerDone(1))
             _delay_ms(100);
-        }
         else
-        {
             _delay_ms(500);
-        }
     }
 #endif
 

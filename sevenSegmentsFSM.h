@@ -38,18 +38,19 @@ uint8_t extractSevenSegDigit(uint32_t value, uint8_t index)
 class SevenSegmentsFSM
 {
 private:
-    Phases _phase;
-    uint8_t _charIndex; // the index of a digit from the error code being displayed during SevenSegDisplayValue phase
-    uint8_t _numberOfChars;
-    uint8_t _flicker;
-    uint8_t _endFlicker;
-    uint8_t _result;
-    uint8_t _value;
+    volatile Phases _phase;
+    volatile uint8_t _charIndex; // the index of a digit from the error code being displayed during SevenSegDisplayValue phase
+    volatile uint8_t _numberOfChars;
+    volatile uint8_t _flicker;
+    volatile uint8_t _endFlicker;
+    volatile uint8_t _result;
+    volatile uint8_t _type;
 
 public:
+    volatile uint8_t value;
 
     void (*OnFirstPhaseStarted)(); // event handler to be executed (if not 0) befor the first phase is started
-    void (*OnLastPhaseDone)(); // event handler to be executed (if not 0) after the last phase is done
+    void (*OnLastPhaseDone)();     // event handler to be executed (if not 0) after the last phase is done
 
     uint8_t isFlickering() { return _flicker; }
 
@@ -61,14 +62,10 @@ public:
         return endFlicker;
     }
 
-    void SetValue(uint8_t value)
-    {
-        _value = value;
-    }
-
-    SevenSegmentsFSM(uint8_t numberOfChars)
+    SevenSegmentsFSM(uint8_t numberOfChars, uint8_t typeChar)
     {
         _numberOfChars = numberOfChars - 1;
+        _type = typeChar;
         Reinit();
     }
 
@@ -81,13 +78,13 @@ public:
     {
         switch (_phase)
         {
-        case SevenSegDisplayType:          // just started displaying the error code
+        case SevenSegDisplayType:    // just started displaying the error code
             if (OnFirstPhaseStarted) // execute the event handler if existant
                 OnFirstPhaseStarted();
             _charIndex = _numberOfChars;   // reinit the index
             _phase = SevenSegDisplayValue; // the next time this function is called it shall process SevenSegDisplayValue
             _flicker = 1;                  // when SevenSegDisplayValue is being processed a short blank will be dispalyed
-            _result = SevenSegF;           // the letter 'F' is to be displayed
+            _result = _type;               // the letter 'P' or 'F' (or anything intialized with) is to be displayed
             break;
 
         case SevenSegDisplayValue: // dispaly the error code
@@ -102,8 +99,8 @@ public:
             {
                 _flicker = 1; // a character is being displayed now, so the next time flicker
                 // uint8_t value = errors[0];                                    // get the first error
-                _result = extractSevenSegDigit(_value, _charIndex); // dispayed the digit with index of "_charIndex"
-                if (_charIndex == 0)                                // is it the last digit to display? then shift the errors stack
+                _result = extractSevenSegDigit(value, _charIndex); // dispayed the digit with index of "_charIndex"
+                if (_charIndex == 0)                               // is it the last digit to display? then shift the errors stack
                 {
                     _phase = SevenSegDisplayFinlaBlank; // move to the next phase of display
                     _flicker = 0;                       // no flicker, the next phase is just blank character for 500ms
@@ -121,7 +118,7 @@ public:
             // reset the state of PhaseOfSevenSeg
             // PhaseOfSevenSeg = SevenSegDisplayType;
             // SevenSegFlicker = 0;
-            Reinit(); // finalize, the result is a blank character
+            Reinit();            // finalize, the result is a blank character
             if (OnLastPhaseDone) // execute the event handler if existing
                 OnLastPhaseDone();
             return 1; // tell that the machine finished executing all its states
