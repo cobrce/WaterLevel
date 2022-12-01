@@ -100,10 +100,6 @@ volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated 
 // event handler executed when the error display fsm finishes executing the last phase
 void errorDisplayFSM_OnLastPhaseDoneHandler()
 {
-    for (uint8_t i = 0; i < sizeof(errors) - 1; i++) // pop recently displayed from error stack
-        errors[i] = errors[i + 1];
-    errors[sizeof(errors) - 1] = 0;
-
     StateOfSevenSeg = SevenSegDisplayingWaterLevel; // switch to display level, if an other error is still in the stack this function will automatically switch back to displaying errors the next time it's called
     levelDisplayFSM.Reinit();                       // reinit the water level display fsm (the display the message from the beginning)
 }
@@ -136,6 +132,10 @@ uint8_t calculate7Seg()
             StateOfSevenSeg = SevenSegDisplayingError;
             errorDisplayFSM.SetValue(errors[0]);
             activeFSM = errorDisplayFSM;
+
+            for (uint8_t i = 0; i < sizeof(errors) - 1; i++) // pop the error being displayed from the stack
+                errors[i] = errors[i + 1];
+            errors[sizeof(errors) - 1] = 0;
         }
     }
 
