@@ -262,9 +262,9 @@ void initTimer1()
 void pwmInit()
 {
     DDRD |= _BV(HB_LED);
-    TCCR2A = _BV(COM2B1) | _BV(WGM21) | _BV(WGM20);
-    TCCR2B = _BV(CS20);
-    pwmWrite(0);
+    TCCR2A = _BV(COM2B1) | _BV(WGM21) | _BV(WGM20); // Fast pwm mode, output in OC2B pin (PD3)
+    TCCR2B = _BV(CS20);                             // no prescaling for the timer
+    pwmWrite(0);                                    // initially set the duty cycle at 0
 }
 
 // initialization function, to init several peripherals, GPIOs and timers
