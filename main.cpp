@@ -61,16 +61,8 @@ uint32_t calculateBarGraph(uint16_t valueInPercent, uint8_t shift)
 // a stack of detected errors to be displayed in in the seven segment
 uint8_t errors[4] = {0};
 
-// the seven segment display system is based on a finite state machine
-// first either the character "P" (for percents) or "F" (for faults) is displayed
-// then follwed by each number of the percentage of water the error code resp.
-// each character is displayed for 500ms then a 100ms of blank to mark the transition between characters,
-// for example 33% is displayed as : P short_blank 3 short_blank 3, this way the two identical numbers can be told apart
-//
-// the use of a finite state machine makes easy to keep track of what should be dispalyed next since this function is called with
-// a timer and no loop should block the interrupt thread
 
-// are we displaying errors or level percentage
+// are we displaying errors or level percentage?
 enum
 {
     SevenSegDisplayingError,
@@ -90,12 +82,17 @@ uint8_t swapBits(uint8_t input)
     return result;
 }
 
+// the seven segment display system is based on a finite state machine
+// first either the character "P" (for percents) or "F" (for faults) is displayed
+// then follwed by each number of the percentage of water the error code resp.
+// each character is displayed for 500ms then a 100ms of blank to mark the transition between characters,
+// for example 33% is displayed as : 'P' [short_blank] '0' [short_blank] '3' [short_blank] '3' [long_blank], this way the two identical numbers can be told apart
+//
+// the use of a finite state machine makes easy to keep track of what should be dispalyed next since the updated is called by
+// a timer interrupt function, and no loop should block the interrupt thread
 SevenSegmentsFSM levelDisplayFSM(3, SevenSegP); // initialize the level display finite state machine as 3 character display
 SevenSegmentsFSM errorDisplayFSM(2, SevenSegF); // ...as a 2 character dispaly
 
-volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
-volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated at slower pace, its previous state is being buffered until next update
-// this function calculates the value of 7seg display whether it's an error code or percentage
 
 // event handler executed when the error display fsm finishes executing the last phase
 void errorDisplayFSM_OnLastPhaseDoneHandler()
@@ -110,6 +107,10 @@ void levelDisplayFSM_OnFirstPhaseStarted()
     levelDisplayFSM.value = levelInPercent; // the set the value to be displayed
 }
 
+
+volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
+volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated at slower pace, its previous state is being buffered until next update
+// this function calculates the value of 7seg display whether it's an error code or percentage
 uint8_t calculate7Seg()
 {
     // code to select the FSM currently being executed
