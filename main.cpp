@@ -97,14 +97,14 @@ SevenSegmentsFSM errorDisplayFSM(2, SevenSegF); // ...as a 2 character dispaly
 // event handler executed when the error display fsm finishes executing the last phase
 void errorDisplayFSM_OnLastPhaseDoneHandler()
 {
-    StateOfSevenSeg = SevenSegDisplayingWaterLevel; // switch to display level, if an other error is still in the stack this function will automatically switch back to displaying errors the next time it's called
-    levelDisplayFSM.Reinit();                       // reinit the water level display fsm (the display the message from the beginning)
+    StateOfSevenSeg = SevenSegDisplayingWaterLevel; // switch to display level, if an other error is still in the stack the display update function will automatically switch back to displaying errors the next time it's called
+    levelDisplayFSM.Reinit();                       // reinit the water level display fsm (to display the message from the beginning)
 }
 
 // even handler executed when the level display fms starts executing the first phase
 void levelDisplayFSM_OnFirstPhaseStarted()
 {
-    levelDisplayFSM.value = levelInPercent; // the set the value to be displayed
+    levelDisplayFSM.value = levelInPercent; // set the value to be displayed
 }
 
 
