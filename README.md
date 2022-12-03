@@ -51,9 +51,9 @@ This could be displayed on LEDs or a bargraph. The 10 bits are split between 2 s
 ```
 [   Atmega328   ][  seconds shift register  ][   first shift register    ]
             PD4 ][ Q0 Q1 Q2 Q3 Q4 Q5 Q6 Q7  ][ Q7   Q6 Q5 Q4 Q3 Q2 Q1 Q0 ]
-              |    |  |  |  |  |  |  |  |      |     |  |  |  |  |  |  |
-           [ A9   A8 A7 A6 A5 A4 A3 A2 A1    A0 ][ G  F  E  D  C  B  A ]
-           [              bargraph              ][    seven segments   ]
+              |    |  |  |  |  |  |  |  |      |    |  |  |  |  |  |  |
+           [ A9   A8 A7 A6 A5 A4 A3 A2 A1     A0 ][ G  F  E  D  C  B  A  ]
+           [              bargraph               ][    seven segments    ]
 ``` 
 
 ## Timers, events and a global view of the code
