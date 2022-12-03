@@ -61,4 +61,4 @@ This could be displayed on LEDs or a bargraph. The 10 bits are split between 2 s
 
 
 # Credits:
-Thanks to yetifrisstlama for [vl53l0x library][https://github.com/yetifrisstlama/vl53l0x-non-arduino]
+Thanks to yetifrisstlama for [vl53l0x library](https://github.com/yetifrisstlama/vl53l0x-non-arduino)
