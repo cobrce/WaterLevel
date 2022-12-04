@@ -64,10 +64,14 @@ This could be displayed on LEDs or a bargraph. The 10 bits are split between 2 s
            [ A9   A8 A7 A6 A5 A4 A3 A2 A1     A0 ][ G  F  E  D  C  B  A  ]
            [              bargraph               ][    seven segments    ]
 ``` 
-<p align=center>Wiring
+<p align=center>Wiring of the bargraph and the seven segments.
 
 ## Timers, events and a global view of the code
+The VL53L0X library uses millis (same as arduino) which uses TIMER0 interrupts to count.
 
+The heart beat PWM is gnerated on PD3 which is associated to TIMER2.
+
+The TIMER1 is used to generate an interruption every 10ms, which is used to updated the duty cycle (PWM value) of the heart beat and to execute the shift registers update (bargraph and seven segments display). Which leaves the main thread to handle the initializations, reading values from the sensor, calculating the percentage of water and then display it on the MAX7219.
 
 
 # Credits:
