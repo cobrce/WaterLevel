@@ -42,16 +42,18 @@ The percentage and some errors code are displayed on a 4 screens MAX7219 display
 #### Seven segment display
 The level in percent and error codes are displayed sequencially on seven segment secreen, one character after another followed by a while character and preceded by a letter telling the message type, for example 53% is represented as "P" "0" "5" "3" " ", an error code of 12 is displayed as "F" "1" "2" " ".
 The 7 bits of the seven segments are stored in a shift register.
-
-![](https://raw.githubusercontent.com/cobrce/WaterLevel/master/gifs/7seg.gif)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cobrce/WaterLevel/master/gifs/7seg.gif">
+</p>
 <p align=center>Displaying F12, F24, P089 (89%)
 
 #### Bargraph
 The percentage is also displayed on 10 bits where each bit reperesents 10% of rounded up of the full water, i.e 32 is represented as 4 lower bits set to 1.
 This could be displayed on LEDs or a bargraph. The 10 bits are split between 2 shift registers and a GPIO : the 1st bit is located at the 8th bit of the shift register of the seven segments (read above), the following 8 bits on the second shift register, the 10th bit is on pin PD4
 
-
-![](https://raw.githubusercontent.com/cobrce/WaterLevel/master/gifs/bargraph.gif)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cobrce/WaterLevel/master/gifs/bargraph.gif">
+</p>
 <p align=center>Displaying progressive values
 
 
