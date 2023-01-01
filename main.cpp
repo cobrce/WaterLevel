@@ -72,14 +72,10 @@ enum
 // swap the order of bits, due to the way the bargraph is wired in the PCB
 uint8_t swapBits(uint8_t input)
 {
-    uint8_t result = 0;
-    for (int i = 0; i < 8; i++)
-    {
-        result <<= 1;
-        result |= (input & 1);
-        input >>= 1;
-    }
-    return result;
+	uint8_t result = 0;
+	for (int i = 0; i < 8; i++)
+		result = (result << 1) | ((input>> i) & 1);
+	return result;
 }
 
 // the seven segment display system is based on a finite state machine
