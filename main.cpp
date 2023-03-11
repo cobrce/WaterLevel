@@ -1,9 +1,11 @@
 // #define TEST // uncomment to enable test mode for simulation
 #include <avr/io.h>
+#include <stdint.h>
 #include <util/delay.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
+#include <math.h>
 #include "MAX7219_attiny.h"
 #include "font.h"
 #include "errors.h"
@@ -36,6 +38,8 @@
 #define TOO_CLOSE_HEIGHT 10
 #define HYSTERESIS 5
 
+void pushError(uint8_t errorValue);
+
 uint16_t EEMEM EE_FullHeight = FULL_WATER + SENSOR_HEIGHT; // eeprom variable in case we calibrate and save the actual values
 volatile uint16_t FullHeight = 0;
 volatile uint16_t distance;       // decalred as global for debug
@@ -61,7 +65,6 @@ uint32_t calculateBarGraph(uint16_t valueInPercent, uint8_t shift)
 // a stack of detected errors to be displayed in in the seven segment
 uint8_t errors[4] = {0};
 
-
 // are we displaying errors or level percentage?
 enum
 {
@@ -72,10 +75,10 @@ enum
 // swap the order of bits, due to the way the bargraph is wired in the PCB
 uint8_t swapBits(uint8_t input)
 {
-	uint8_t result = 0;
-	for (int i = 0; i < 8; i++)
-		result = (result << 1) | ((input>> i) & 1);
-	return result;
+    uint8_t result = 0;
+    for (int i = 0; i < 8; i++)
+        result = (result << 1) | ((input >> i) & 1);
+    return result;
 }
 
 // the seven segment display system is based on a finite state machine
@@ -89,7 +92,6 @@ uint8_t swapBits(uint8_t input)
 SevenSegmentsFSM levelDisplayFSM(3, SevenSegP); // initialize the level display finite state machine as 3 character display
 SevenSegmentsFSM errorDisplayFSM(2, SevenSegF); // ...as a 2 character dispaly
 
-
 // event handler executed when the error display fsm finishes executing the last phase
 void errorDisplayFSM_OnLastPhaseDoneHandler()
 {
@@ -102,7 +104,6 @@ void levelDisplayFSM_OnFirstPhaseStarted()
 {
     levelDisplayFSM.value = levelInPercent; // set the value to be displayed
 }
-
 
 volatile uint32_t lastSevenSegUpdate = 0; // the last time when the seven segment value was updated
 volatile uint8_t previous7SegValue = 0;   // since the seven segment is updated at slower pace, its previous state is being buffered until next update
@@ -169,17 +170,67 @@ void displayInShiftRegister()
     UpdateRegister(); // latch
 }
 
-uint16_t measureDistance() // in cm
+uint8_t measureDistance(uint16_t * output) // in cm
 {
     statInfo_t xTraStats;
 
-    distance = readRangeSingleMillimeters(&xTraStats) / 10;
+    uint8_t result = readRangeSingleMillimeters(&xTraStats);
 
-    debug_dec(distance);
+    if ((result | 1) == 8191) // in case of error
+    { 
+        *output = result; 
+        return false;
+    }
+
+    *output = distance/10;
+    debug_dec(*output);
     debug_str("cm ");
-    return distance;
+    return true;
 }
 
+#define N_SAMPLES 10
+uint16_t data[N_SAMPLES] = {0};
+
+uint16_t calculateMean(uint16_t *data, uint16_t len)
+{
+    uint16_t mean = 0;
+    for (int i = 0; i < len; i++)
+        mean += data[i];
+    return mean / len;
+}
+
+uint16_t measureMeanDistance()
+{
+    // take several samples
+    for (int i = 0; i < N_SAMPLES;)
+    {
+        uint16_t result;
+        if (!measureDistance(&result))
+        {
+            pushError(result - 8100); // display the error code in the seven segments (either 90 or 91)
+        }
+        else
+        {
+            distance = result;
+            data[i] = distance;
+            i++;
+        }
+    }
+    // calculate the mean of the values
+    uint32_t mean = calculateMean(data, N_SAMPLES);
+
+    // order the samples based on how far from the mean value
+    for (int i = 0; i < N_SAMPLES; i++)
+        for (int j = i + 1; j < N_SAMPLES; j++)
+            if (fabs(mean - data[i]) > fabs(mean - data[j]))
+            {
+                uint16_t temp = data[i];
+                data[i] = data[j];
+                data[j] = temp;
+            }
+    // calculate the mean of half the data that are closer to the average
+    return calculateMean(data, N_SAMPLES / 2);
+}
 // display integer value in MAX7219 display
 
 volatile uint8_t AutoRefreshCounter = 0; // for some reason my display shows weird character that I had to reinit it regularly
@@ -368,12 +419,24 @@ int main(void)
 
     while (1) // main loop
     {
-        uint16_t distance = measureDistance(); // start the distance measurement and return the result
-        if ((distance | 1) == 8191)            // is it an error code?
+        /* uint16_t distance = measureMeanDistance(); // start the distance measurement and return the result */
+
+        uint16_t result = 0;
+        if (!measureDistance(&result))
         {
-            pushError(distance - 8100); // display the error code in the seven segments (either 90 or 91)
+            pushError(result - 8100); // display the error code in the seven segments (either 90 or 91)
             continue;
         }
+
+        distance = result;
+#define FILTER
+#ifdef FILTER
+#define alpha 0.1f
+        // low pass filter
+        static float prevValue = 0.0f; // inititalized at 0
+        prevValue = alpha * distance + (1.0-alpha)*prevValue;
+        distance = (uint16_t)prevValue;
+#endif
 
         levelInPercent = ((FullHeight - distance) * 100 / FULL_WATER);
 
@@ -386,6 +449,6 @@ int main(void)
         debug_str("% ");
 
         displayInt(levelInPercent, TRUE); // update the MAX7219
-        _delay_ms(200);
+        _delay_ms(100);
     }
 }
