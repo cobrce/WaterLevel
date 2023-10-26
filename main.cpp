@@ -170,11 +170,11 @@ void displayInShiftRegister()
     UpdateRegister(); // latch
 }
 
-uint8_t measureDistance(uint16_t * output) // in cm
+uint16_t measureDistance(uint16_t * output) // in cm
 {
     statInfo_t xTraStats;
 
-    uint8_t result = readRangeSingleMillimeters(&xTraStats);
+    uint16_t result = readRangeSingleMillimeters(&xTraStats);
 
     if ((result | 1) == 8191) // in case of error
     { 
@@ -182,7 +182,7 @@ uint8_t measureDistance(uint16_t * output) // in cm
         return false;
     }
 
-    *output = distance/10;
+    *output = result/10;
     debug_dec(*output);
     debug_str("cm ");
     return true;
