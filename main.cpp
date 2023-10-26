@@ -32,7 +32,7 @@
 #endif // !FALSE
 
 // some constants
-#define SENSOR_HEIGHT 30
+#define SENSOR_HEIGHT 10
 #define FULL_WATER 190
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
@@ -431,7 +431,7 @@ int main(void)
         distance = result;
 #define FILTER
 #ifdef FILTER
-#define alpha 0.1f
+#define alpha 0.4f
         // low pass filter
         static float prevValue = 0.0f; // inititalized at 0
         prevValue = alpha * distance + (1.0-alpha)*prevValue;
