@@ -199,40 +199,7 @@ uint16_t calculateMean(uint16_t *data, uint16_t len)
     return mean / len;
 }
 
-uint16_t measureMeanDistance()
-{
-    // take several samples
-    for (int i = 0; i < N_SAMPLES;)
-    {
-        uint16_t result;
-        if (!measureDistance(&result))
-        {
-            pushError(result - 8100); // display the error code in the seven segments (either 90 or 91)
-        }
-        else
-        {
-            distance = result;
-            data[i] = distance;
-            i++;
-        }
-    }
-    // calculate the mean of the values
-    uint32_t mean = calculateMean(data, N_SAMPLES);
-
-    // order the samples based on how far from the mean value
-    for (int i = 0; i < N_SAMPLES; i++)
-        for (int j = i + 1; j < N_SAMPLES; j++)
-            if (fabs(mean - data[i]) > fabs(mean - data[j]))
-            {
-                uint16_t temp = data[i];
-                data[i] = data[j];
-                data[j] = temp;
-            }
-    // calculate the mean of half the data that are closer to the average
-    return calculateMean(data, N_SAMPLES / 2);
-}
 // display integer value in MAX7219 display
-
 volatile uint8_t AutoRefreshCounter = 0; // for some reason my display shows weird character that I had to reinit it regularly
 void displayInt(uint16_t value, uint8_t isPercent)
 {
@@ -269,15 +236,6 @@ void displayInt(uint16_t value, uint8_t isPercent)
     SREG = oldSreg;
 }
 
-// display a number (not in percent) for one second
-void displayError(uint16_t error_code)
-{
-    while (TRUE)
-    {
-        displayInt(error_code, FALSE);
-        _delay_ms(1000);
-    }
-}
 
 // display a number (not in percent) for one second then clear the screen for 200ms
 // usually used to display constants (Fullheight is flashed at startup for example)
