@@ -275,7 +275,7 @@ void pwmInit()
 
 // initialization function, to init several peripherals, GPIOs and timers
 void init()
-{
+        {
     debugInit();
     //--------------------------------------------------
     // GPIOs
@@ -324,8 +324,23 @@ void pushError(uint8_t errorValue)
     errors[0] = errorValue; // the first element is the latest error
 }
 
+#define TROUBLE
 int main(void)
 {
+#ifdef TROUBLE
+
+    // DDRD |= _BV(HB_LED);
+    // initTimer1();
+    // pwmInit();
+    // sei();
+    init();
+    Max7219_Init();
+    while (1)
+    {
+        flashValue(1234);
+    }
+#endif
+
     init();
 
 // this code is used for tests in simulator, so the measurments are generated and the timers are replaced by delays
