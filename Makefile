@@ -27,6 +27,9 @@ all:
 
 flash: all
 	${AVRDUDE} -p ${MCU} -c stk500v1 -P COM5 -b 115200 -V -U flash:w:${TARGET}.hex:i -U eeprom:w:${TARGET}.eep:a -F
+	
+flashnet: all
+	${AVRDUDE} -p ${MCU} -c stk500v1 -P net:192.168.1.20:328 -b 115200 -V -U flash:w:${TARGET}.hex:i -U eeprom:w:${TARGET}.eep:a -F
 
 fuse:
 	$(AVRDUDE) -p ${MCU} -c stk500v1 -P COM4 -b 115200 -U hfuse:w:${FUSE_H}:m -U lfuse:w:${FUSE_L}:m
