@@ -11,7 +11,8 @@ LD=avr-ld
 OBJCOPY=avr-objcopy
 SIZE=avr-size
 AVRDUDE=avrdude
-CFLAGS=-std=c++0x -Wall -g -Os  -gdwarf-2 -mmcu=${MCU} -DF_CPU=${F_CPU} -I. -Ivl53l0x-non-arduino/util
+CFLAGS=-r --param=min-pagesize=0 -std=c++0x -Wall -g -Os  -gdwarf-2 -mmcu=${MCU} -DF_CPU=${F_CPU} -I. -Ivl53l0x-non-arduino/util
+# CFLAGS = -Os -mcall-prologues -g3 -std=c++0x -Wall -Wundef --param=min-pagesize=0 -I. -Ivl53l0x-non-arduino/util -mmcu=${MCU} -DF_CPU=${F_CPU} -Wcpp
 TARGET=main
 
 SRCS = main.cpp  $(wildcard vl53l0x-non-arduino/*.c) $(wildcard vl53l0x-non-arduino/util/*.c)
@@ -20,10 +21,11 @@ SRCS = main.cpp  $(wildcard vl53l0x-non-arduino/*.c) $(wildcard vl53l0x-non-ardu
 
 all:
 	${CC} ${CFLAGS} -o ${TARGET}.o ${SRCS}
-	${LD} -o ${TARGET}.elf ${TARGET}.o
+	${LD} -r -o ${TARGET}.elf ${TARGET}.o
 	${OBJCOPY} -j .text -j .data -O ihex ${TARGET}.o ${TARGET}.hex
 	${OBJCOPY} -j .eeprom  --set-section-flags=.eeprom=alloc,load --change-section-lma .eeprom=0  --no-change-warnings -O ihex ${TARGET}.elf ${TARGET}.eep
-	${SIZE} -C --mcu=${MCU} ${TARGET}.elf
+#	${SIZE} -C --mcu=${MCU} ${TARGET}.elf
+	${SIZE} ${TARGET}.elf
 
 flash: all
 	${AVRDUDE} -p ${MCU} -c stk500v1 -P COM5 -b 115200 -V -U flash:w:${TARGET}.hex:i -U eeprom:w:${TARGET}.eep:a -F
