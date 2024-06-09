@@ -194,7 +194,7 @@ uint16_t data[N_SAMPLES] = {0};
 uint16_t calculateMean(uint16_t *data, uint16_t len)
 {
     uint16_t mean = 0;
-    for (int i = 0; i < len; i++)
+    for (uint16_t i = 0; i < len; i++)
         mean += data[i];
     return mean / len;
 }
@@ -324,7 +324,7 @@ void pushError(uint8_t errorValue)
     errors[0] = errorValue; // the first element is the latest error
 }
 
-#define TROUBLE
+// #define TROUBLE
 int main(void)
 {
 #ifdef TROUBLE
@@ -374,8 +374,12 @@ int main(void)
     }
 #endif
 
-    initVL53L0X(0);
     Max7219_Init();
+    flashValue(0);
+
+    initVL53L0X(0);
+
+    flashValue(1);
 
     // configure the VLC53L0X sensor
     setSignalRateLimit(0.1);
