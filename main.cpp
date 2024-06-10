@@ -10,7 +10,6 @@
 #include "font.h"
 #include "errors.h"
 #include "ShiftRegister.h"
-#include "calibrate.h"
 #include "sevenSegmentsFSM.h"
 
 // Pins definition
@@ -37,6 +36,11 @@
 #define TOO_FAR_HEIGHT (FULL_WATER + SENSOR_HEIGHT + 10)
 #define TOO_CLOSE_HEIGHT 10
 #define HYSTERESIS 5
+
+uint16_t measureDistance(uint16_t *output);
+void flashValue(uint16_t value);
+void pushError(uint8_t errorValue);
+#include "calibrate.h"
 
 void pushError(uint8_t errorValue);
 
@@ -170,19 +174,19 @@ void displayInShiftRegister()
     UpdateRegister(); // latch
 }
 
-uint16_t measureDistance(uint16_t * output) // in cm
+uint16_t measureDistance(uint16_t *output) // in cm
 {
     statInfo_t xTraStats;
 
     uint16_t result = readRangeSingleMillimeters(&xTraStats);
 
     if ((result | 1) == 8191) // in case of error
-    { 
-        *output = result; 
+    {
+        *output = result;
         return false;
     }
 
-    *output = result/10;
+    *output = result / 10;
     debug_dec(*output);
     debug_str("cm ");
     return true;
@@ -236,7 +240,6 @@ void displayInt(uint16_t value, uint8_t isPercent)
     SREG = oldSreg;
 }
 
-
 // display a number (not in percent) for one second then clear the screen for 200ms
 // usually used to display constants (Fullheight is flashed at startup for example)
 void flashValue(uint16_t value)
@@ -273,9 +276,37 @@ void pwmInit()
     pwmWrite(0);                                    // initially set the duty cycle at 0
 }
 
+// send signal on TX and read in RX at startup,
+// if it's the same then RX and TX are shorted and calibration is done
+
+extern volatile uint8_t calibrateRequested;
+void CheckCalibrationOnStartup()
+{
+    uint8_t readValue = 0;
+
+    DDRD = _BV(PD1); // TX as output
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        if (('C' >> i) & 1)
+            PORTD |= 1;
+        else
+            PORTD &= ~1;
+
+        _delay_ms(10);
+
+        if (PIND & _BV(PD0))
+            readValue |= 1 << i;
+    }
+
+    calibrateRequested = readValue == 'C';
+
+    
+}
 // initialization function, to init several peripherals, GPIOs and timers
 void init()
-        {
+{
+
+    CheckCalibrationOnStartup();
     debugInit();
     //--------------------------------------------------
     // GPIOs
@@ -411,7 +442,7 @@ int main(void)
 #define alpha 0.4f
         // low pass filter
         static float prevValue = 0.0f; // inititalized at 0
-        prevValue = alpha * distance + (1.0-alpha)*prevValue;
+        prevValue = alpha * distance + (1.0 - alpha) * prevValue;
         distance = (uint16_t)prevValue;
 #endif
 
