@@ -17,7 +17,9 @@ inline uint16_t calibrateFullHeight()
     else if (result < TOO_CLOSE_HEIGHT)
         return CALBIRATION_SENSOR_TOO_CLOSE;
 
-    FullHeight = FULL_WATER + result;
+    // to make current value as 98%
+    FullHeight = FULL_WATER * 102/100 + result;
+
     eeprom_write_word(&EE_FullHeight, FullHeight);
     distance = result;
     return 0;
